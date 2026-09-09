@@ -22,7 +22,7 @@ window.APP_CONFIG = {
   flows: {
     // Roster + weekly availability — one row per mod in Excel, with a
     // time range (or blank) in each day-of-week column.
-    getMods:         "",   // GET/POST -> [{ name, email, sun, mon, tue, wed, thu, fri, sat }, ...]
+    getMods:         "https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/c9a10af6d141423f9104150509e7b0e5/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=qpYkROwJd5DPd_9rARWyLQEvRbTqlHeO4BiGf4QhOPg",   // GET/POST -> [{ name, email, sun, mon, tue, wed, thu, fri, sat }, ...]
                             //   each day value is "" (off) or "HH:MM-HH:MM" (24hr, Pacific Time)
     addMod:          "",   // POST { name, email }
     deleteMod:       "",   // POST { name }
