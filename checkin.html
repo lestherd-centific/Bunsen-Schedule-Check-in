@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Check In / Out — Centific</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <span class="brand-word">centi<span class="accent">fic</span></span>
+    <span class="brand-sub">Mod Scheduler</span>
+  </div>
+  <nav class="app-nav">
+    <a href="index.html">Scheduler</a>
+    <a href="checkin.html" class="active">Check In / Out</a>
+  </nav>
+  <div class="header-right">
+    <span id="ptClock" class="pt-clock">--:--</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+  <div id="demoBanner" class="banner banner-demo" style="display:none;">
+    ⚠️ <span>Demo mode: check-ins are only saved in this browser. Connect Power Automate (see <code>SETUP-GUIDE.md</code>) to log hours centrally.</span>
+  </div>
+
+  <div class="checkin-wrap">
+
+    <h1 class="section-title" style="text-align:center; margin-bottom: 18px;">
+      <span class="eyebrow">In-Office Tracking</span>
+      <span class="headline">Check In / Check Out</span>
+    </h1>
+
+    <div class="card status-card" id="statusCard">
+      <div class="field" style="text-align:left; max-width:320px; margin:0 auto 20px;">
+        <label class="field-label">Your work email</label>
+        <input type="email" id="emailInput" placeholder="you@centific.com" />
+      </div>
+
+      <div id="statusDisplay" style="display:none;">
+        <div>
+          <span id="statusDot" class="status-dot-lg out"></span>
+          <span id="statusHeadline" class="status-headline">—</span>
+        </div>
+        <div id="statusSub" class="status-sub">Enter your email to see your status.</div>
+
+        <div class="checkin-actions">
+          <button id="checkInBtn" class="btn btn-primary">Check In</button>
+          <button id="checkOutBtn" class="btn btn-secondary">Check Out</button>
+        </div>
+      </div>
+
+      <p id="checkinError" class="banner banner-error" style="display:none; text-align:left; margin-top:16px;"></p>
+      <p id="checkinSuccess" class="banner banner-success" style="display:none; text-align:left; margin-top:16px;"></p>
+    </div>
+
+    <div class="card card-pad" style="margin-top:20px;">
+      <h2 class="sidebar-title">Your Recent Activity</h2>
+      <table class="log-table" id="logTable" style="display:none;">
+        <thead>
+          <tr><th>Action</th><th>Date</th><th>Time (PT)</th></tr>
+        </thead>
+        <tbody id="logTableBody"></tbody>
+      </table>
+      <div id="logEmpty" class="empty-state">Enter your email above to see your check-in history.</div>
+    </div>
+
+  </div>
+
+  <p class="footer-note">© CENTIFIC. INTERNAL TOOL. ALL TIMES SHOWN IN PACIFIC TIME.</p>
+</div>
+
+<script src="config.js"></script>
+<script src="data.js"></script>
+<script src="checkin.js"></script>
+</body>
+</html>
