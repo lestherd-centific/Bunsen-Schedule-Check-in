@@ -277,10 +277,15 @@
 
   function startCreateDrag(mouseDownEvent, modName) {
     mouseDownEvent.preventDefault();
-    let lockedDayIndex = null;
-    let lockedColEl = null;
+    // Tracks whichever day column the cursor is CURRENTLY over — not
+    // whichever one it first entered. Locking to the first column broke
+    // dragging past Sunday, since the sidebar sits to the left of the
+    // grid and Sunday is always the first column the cursor crosses.
+    let currentDayIndex = null;
+    let currentColEl = null;
     let startMin = null;
     let currentMin = null;
+    let started = false;
 
     const ghost = document.createElement("div");
     ghost.className = "ghost-block";
@@ -289,37 +294,41 @@
     function onMove(e) {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const col = el && el.closest ? el.closest(".cal-day-col") : null;
-      if (col && lockedColEl === null) {
-        lockedColEl = col;
-        lockedDayIndex = parseInt(col.dataset.dayIndex, 10);
-        col.appendChild(ghost);
+      if (!col) return; // cursor is over the sidebar or elsewhere — ignore
+
+      const rect = col.getBoundingClientRect();
+      const minutesHere = snap(((e.clientY - rect.top) / HOUR_PX) * 60);
+
+      if (!started) {
+        started = true;
+        startMin = minutesHere; // anchor point, set once on first entry
+      }
+      currentMin = minutesHere;
+      currentDayIndex = parseInt(col.dataset.dayIndex, 10);
+
+      if (col !== currentColEl) {
+        currentColEl = col;
+        col.appendChild(ghost); // move the preview block to the new day
         ghost.style.display = "block";
-        const rect = col.getBoundingClientRect();
-        startMin = snap(((e.clientY - rect.top) / HOUR_PX) * 60);
-        currentMin = startMin;
-      } else if (lockedColEl) {
-        const rect = lockedColEl.getBoundingClientRect();
-        currentMin = snap(((e.clientY - rect.top) / HOUR_PX) * 60);
       }
-      if (lockedColEl) {
-        const lo = Math.min(startMin, currentMin);
-        const hi = Math.max(startMin, currentMin);
-        const dur = Math.max(hi - lo, MIN_DURATION);
-        ghost.style.top = ((lo / 60) * HOUR_PX) + "px";
-        ghost.style.height = ((dur / 60) * HOUR_PX) + "px";
-      }
+
+      const lo = Math.min(startMin, currentMin);
+      const hi = Math.max(startMin, currentMin);
+      const dur = Math.max(hi - lo, MIN_DURATION);
+      ghost.style.top = ((lo / 60) * HOUR_PX) + "px";
+      ghost.style.height = ((dur / 60) * HOUR_PX) + "px";
     }
 
     async function onUp() {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
       ghost.remove();
-      if (lockedDayIndex === null) return;
+      if (currentDayIndex === null) return;
       let lo = Math.min(startMin, currentMin);
       let hi = Math.max(startMin, currentMin);
       if (hi - lo < MIN_DURATION) hi = lo + 60; // simple click -> default 1hr
       hi = Math.min(hi, 24 * 60);
-      const day = DAY_KEYS[lockedDayIndex];
+      const day = DAY_KEYS[currentDayIndex];
       if (!confirmOverwrite(modName, day)) return;
       await DataAPI.setAvailability(modName, day, minutesToHHMM(lo), minutesToHHMM(hi));
       await loadAll();
