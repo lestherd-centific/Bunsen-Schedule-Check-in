@@ -54,13 +54,22 @@ const DataAPI = (() => {
   }
 
   async function callFlow(url, payload) {
+    // Deliberately sent as text/plain with NO custom headers, instead of
+    // Content-Type: application/json + an X-Edit-Key header. Either of
+    // those forces the browser to send an invisible CORS "preflight"
+    // check before the real request — and some Power Automate HTTP
+    // trigger URLs (the newer environment.api.powerplatform.com ones)
+    // don't answer that preflight correctly yet, silently blocking every
+    // call. text/plain + no extra headers keeps this a CORS "simple
+    // request," which skips preflight entirely. The body is still valid
+    // JSON text underneath — flows read it with json(triggerBody()).
+    // The edit key travels inside the body (editKey) rather than a
+    // header, for the same reason.
+    const body = Object.assign({}, payload || {}, { editKey: getEditKey() });
     const res = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Edit-Key": getEditKey(),
-      },
-      body: JSON.stringify(payload || {}),
+      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       throw new Error(`Power Automate flow returned ${res.status}`);

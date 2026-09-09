@@ -79,14 +79,27 @@ You'll repeat a similar pattern seven times. Go to [make.powerautomate.com](http
 
 ### General pattern for every flow
 
+> **Important — how the site sends data:** the website deliberately sends its request body as
+> `Content-Type: text/plain` with no custom headers, instead of the more typical
+> `application/json` + a custom header. Either of those forces the browser to send an
+> invisible CORS "preflight" check first, and some Power Automate HTTP trigger URLs (the
+> newer `environment.api.powerplatform.com` ones) don't answer that preflight correctly,
+> which silently blocks every call before it even reaches your flow. Because of `text/plain`,
+> Power Automate does **not** auto-parse the body into `triggerBody()` as an object — every
+> expression below wraps it as `json(triggerBody())?['fieldName']` instead of the more usual
+> `triggerBody()?['fieldName']`. Don't mix the two up. For the same CORS reason, the edit
+> password token also travels as a field **inside the body** (`editKey`) rather than as a
+> header.
+
 1. **Trigger**: "When an HTTP request is received."
    - Leave "Request Body JSON Schema" blank at first — save the flow once, run it once with
      sample data (or use "Use sample payload to generate schema") to auto-fill it.
 2. **(Write flows only) Add a security condition** right after the trigger:
    - Add an action: **List rows present in a table** → `Password` (no filter needed, it's
      one row) — this fetches the current password straight from Excel.
-   - Add a **Condition**: `triggerOutputs()?['headers']?['X-Edit-Key']` **is equal to**
-     the `Password` column of the row you just fetched.
+   - Add a **Condition**: click the left box → **Expression** tab → type
+     `json(triggerBody())?['editKey']` — **is equal to** — right box → **Dynamic content** →
+     pick `Password` from the "List rows" step.
    - If **No** → add a **Response** action: Status Code `401`, Body `{"error":"unauthorized"}`.
      Put the rest of the flow's actions in the **Yes** branch.
    - Because it's looked up from Excel on every call, changing the password in the
@@ -96,61 +109,62 @@ You'll repeat a similar pattern seven times. Go to [make.powerautomate.com](http
    `application/json`, Body = the data described below).
 5. Save. Power Automate shows an **HTTP POST URL** on the trigger card — copy it into the
    matching slot in `config.js`.
-6. **CORS**: Power Automate's HTTP trigger responses generally allow cross-origin calls by
-   default. If you get a browser CORS error when testing from GitHub Pages, send me the
-   exact error and we'll add the right response headers.
 
-### Flow 1 — `VerifyPassword` (no X-Edit-Key condition — this IS the login check)
-- Trigger body: `{ "password": "whatever the user typed" }`
+### Flow 1 — `VerifyPassword` (no editKey condition — this IS the login check)
+- Trigger body: `{ "password": "whatever the user typed", "editKey": "" }`
 - Action: **List rows present in a table** → `Password`.
-- Condition: does the submitted `password` equal that row's `Password` value?
+- Condition: left box, **Expression** → `json(triggerBody())?['password']` — is equal to —
+  right box, **Dynamic content** → `Password` (from the List rows step).
   - **Yes**: Response `200` → `{ "ok": true }`
   - **No**: Response `200` → `{ "ok": false }`
 - The website remembers a correct password only for the current browser tab, and sends it
-  back as the `X-Edit-Key` header on every write afterward — which is what the condition in
-  every write flow below checks.
+  back as the `editKey` field in the body on every write afterward — which is what the
+  condition in every write flow below checks.
 
 ### Flow 2 — `GetMods`
-- Trigger: HTTP request (GET/POST, no security condition needed — read-only).
+- Trigger: HTTP request (no security condition needed — read-only).
 - Action: **List rows present in a table** → `Mods`.
 - Response body: an array shaped like
   `[{ "name": "Alex", "email": "alex@centific.com", "sun": "", "mon": "09:00-17:00", "tue": "", "wed": "", "thu": "", "fri": "", "sat": "" }, ...]`.
   Use a **Select** action to map Excel's `Name/Email/Sun/Mon/.../Sat` columns to the
   lowercase keys `name/email/sun/mon/.../sat` the app expects.
 
-### Flow 3 — `AddMod` (write — add the X-Edit-Key condition)
-- Trigger body: `{ "name": "Alex", "email": "alex@centific.com" }`
-- Action: **Add a row into a table** → `Mods` → `Name` and `Email` from the trigger body,
-  all seven day columns left blank.
+### Flow 3 — `AddMod` (write — add the editKey condition)
+- Trigger body: `{ "name": "Alex", "email": "alex@centific.com", "editKey": "..." }`
+- Action: **Add a row into a table** → `Mods` → `Name` = `json(triggerBody())?['name']`,
+  `Email` = `json(triggerBody())?['email']`, all seven day columns left blank.
 - Response: `{ "ok": true }`.
 
 ### Flow 4 — `DeleteMod` (write)
-- Trigger body: `{ "name": "Alex" }`
-- Action: **List rows present in a table** (`Mods`), filter query `Name eq '@{triggerBody()?['name']}'`.
+- Trigger body: `{ "name": "Alex", "editKey": "..." }`
+- Action: **List rows present in a table** (`Mods`), filter query
+  `Name eq '@{json(triggerBody())?['name']}'`.
 - Action: **Apply to each** row found → **Delete a row**. (Deleting the row removes their
   availability automatically, since it's all one row.)
 - Response: `{ "ok": true }`.
 
 ### Flow 5 — `SetAvailability` (write)
-- Trigger body: `{ "name": "Alex", "day": "mon", "start": "09:00", "end": "17:00" }`
+- Trigger body: `{ "name": "Alex", "day": "mon", "start": "09:00", "end": "17:00", "editKey": "..." }`
   (an empty `start`/`end` means "clear this day.")
-- Action: **List rows present in a table** (`Mods`), filter `Name eq '@{triggerBody()?['name']}'`.
+- Action: **List rows present in a table** (`Mods`), filter
+  `Name eq '@{json(triggerBody())?['name']}'`.
 - Action: **Update a row**, keyed to that row, setting the column matching `day` (map
   `sun/mon/tue/wed/thu/fri/sat` to the `Sun/Mon/Tue/Wed/Thu/Fri/Sat` columns — a Switch
-  action on `triggerBody()?['day']` is the simplest way) to
-  `@{if(equals(triggerBody()?['start'], ''), '', concat(triggerBody()?['start'], '-', triggerBody()?['end']))}`.
+  action on `json(triggerBody())?['day']` is the simplest way) to
+  `@{if(equals(json(triggerBody())?['start'], ''), '', concat(json(triggerBody())?['start'], '-', json(triggerBody())?['end']))}`.
 - Response: `{ "ok": true }`.
 
 ### Flow 6 — `CheckInOut`
-- No X-Edit-Key condition needed — every mod needs to use this, not just schedulers.
+- No editKey condition needed — every mod needs to use this, not just schedulers.
 - Trigger body: `{ "email": "name@centific.com", "action": "in", "timestampUtc": "2026-09-09T16:03:00.000Z" }`
-- Action: **Add a row into a table** → `CheckIns` → map `Email`, `Action`, `TimestampUtc`.
+- Action: **Add a row into a table** → `CheckIns` → map `Email` = `json(triggerBody())?['email']`,
+  `Action` = `json(triggerBody())?['action']`, `TimestampUtc` = `json(triggerBody())?['timestampUtc']`.
 - Response: `{ "ok": true }`.
 
 ### Flow 7 — `GetCheckIns`
 - Trigger body (optional): `{ "email": "name@centific.com" }`
 - Action: **List rows present in a table** → `CheckIns`. If `email` was provided, add a
-  filter query `Email eq '@{triggerBody()?['email']}'`; otherwise return all rows.
+  filter query `Email eq '@{json(triggerBody())?['email']}'`; otherwise return all rows.
 - Response: array shaped like `[{ "email": "...", "action": "in", "timestampUtc": "..." }, ...]`.
 
 ---
@@ -206,9 +220,11 @@ If the live URL 404s, work through these in order:
 
 - **Security model**: the real edit password lives only in the Excel `Password` table and is
   checked server-side by the `VerifyPassword` flow — the website's code never contains a
-  password. The value the browser sends back on writes (`X-Edit-Key`) is checked against
-  that same Excel cell on every write call, so changing the password in Excel instantly
-  invalidates anyone still using the old one.
+  password. The value the browser sends back on writes (the `editKey` field in the request
+  body) is checked against that same Excel cell on every write call, so changing the
+  password in Excel instantly invalidates anyone still using the old one.
+- **Why the body instead of a header**: see the callout at the top of Part 2 — it's to avoid
+  a CORS preflight issue some Power Automate URLs currently have.
 - **One shift per mod per day**: if someone needs a split shift (e.g. 9–12 and 2–6 the same
   day), the current single-cell-per-day model can't represent that — let me know if this is
   a real need and we'll adjust the data model.
