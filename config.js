@@ -34,7 +34,7 @@ window.APP_CONFIG = {
 
     // Edit-mode password (checked against the single value in the
     // Excel "Password" table — see SETUP-GUIDE.md)
-    verifyPassword:  "",   // POST { password } -> { ok: true } or { ok: false }
+    verifyPassword:  "https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/30/workflows/6a40663ceadc44a889e35db3218238f0/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=aRKBlIe7NSE-xGnLNvNPKKJ-F-KsCj4r2X-TeOruyHE",   // POST { password } -> { ok: true } or { ok: false }
   },
 
   // ----------------------------------------------------------
