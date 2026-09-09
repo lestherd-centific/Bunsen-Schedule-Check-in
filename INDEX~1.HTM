@@ -45,9 +45,15 @@
     <div class="card card-pad" id="sidebar">
       <h2 class="sidebar-title">Mods</h2>
 
-      <div id="addModRow" class="mod-add-row" style="display:none;">
-        <input type="text" id="newModInput" placeholder="Add mod name…" />
-        <button id="addModBtn" class="btn btn-primary btn-sm">Add</button>
+      <div id="addModRow" style="display:none; margin-bottom:14px;">
+        <div class="mod-add-row" style="margin-bottom:6px;">
+          <input type="text" id="newModInput" placeholder="Mod name…" />
+        </div>
+        <div class="mod-add-row">
+          <input type="email" id="newModEmailInput" placeholder="Email…" />
+          <button id="addModBtn" class="btn btn-primary btn-sm">Add</button>
+        </div>
+        <p id="addModError" class="banner banner-error" style="display:none; margin-top:8px; margin-bottom:0;"></p>
       </div>
 
       <ul id="modList" class="mod-list"></ul>

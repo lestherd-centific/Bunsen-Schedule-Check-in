@@ -6,39 +6,42 @@
    falls back to a browser-local demo store, so the app is fully
    usable before Power Automate is connected.
 
-   Once real flow URLs are set in config.js, data is shared with
-   the whole team via Excel + Power Automate instead of being
-   local to one browser.
+   Data model: each mod is one row (name, email, and one time
+   range per day of the week — "" means not scheduled that day).
+   A mod can have at most one shift per day.
    ============================================================ */
 
 const DataAPI = (() => {
   const cfg = window.APP_CONFIG;
-  const DEMO_KEY = "centific_mod_scheduler_demo_v1";
+  const DEMO_KEY = "centific_mod_scheduler_demo_v2";
+  const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+
+  function blankMod(name, email) {
+    const m = { name, email: email || "" };
+    DAY_KEYS.forEach(d => m[d] = "");
+    return m;
+  }
 
   function loadDemo() {
     try {
       const raw = localStorage.getItem(DEMO_KEY);
       if (raw) return JSON.parse(raw);
     } catch (e) { /* ignore */ }
-    return { mods: [], shifts: [], checkins: [] };
+    return { mods: [], checkins: [] };
   }
 
   function saveDemo(store) {
     try { localStorage.setItem(DEMO_KEY, JSON.stringify(store)); } catch (e) { /* ignore */ }
   }
 
-  function uid() {
-    return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-  }
-
   function isConfigured(url) {
     return typeof url === "string" && url.trim().length > 0;
   }
 
-  // The edit key is handed to us by the VerifyPassword flow after a
-  // correct password (which lives in Excel, not in this code) is entered.
-  // It's kept only for the current browser tab session — closing the tab
-  // requires re-entering the password.
+  // The edit-mode session token. It's the password itself (checked
+  // against the single Excel "Password" value on every write), kept
+  // only for the current browser tab — closing the tab requires
+  // re-entering the password.
   const SESSION_KEY = "centific_edit_key";
   function getEditKey() {
     try { return sessionStorage.getItem(SESSION_KEY) || ""; } catch (e) { return ""; }
@@ -72,8 +75,8 @@ const DataAPI = (() => {
   async function verifyPassword(password) {
     if (isConfigured(cfg.flows.verifyPassword)) {
       const result = await callFlow(cfg.flows.verifyPassword, { password });
-      if (result && result.ok && result.editKey) {
-        setEditKey(result.editKey);
+      if (result && result.ok) {
+        setEditKey(password); // the password itself authorizes subsequent writes
         return true;
       }
       setEditKey("");
@@ -81,7 +84,7 @@ const DataAPI = (() => {
     }
     // Demo mode only (no Excel/Power Automate connected yet) — see config.js.
     if (password === cfg.demoPassword) {
-      setEditKey("demo"); // harmless placeholder; demo writes never leave the browser
+      setEditKey(password);
       return true;
     }
     setEditKey("");
@@ -92,7 +95,7 @@ const DataAPI = (() => {
     setEditKey("");
   }
 
-  // ---------------- MODS ----------------
+  // ---------------- MODS + AVAILABILITY ----------------
 
   async function getMods() {
     if (isConfigured(cfg.flows.getMods)) {
@@ -101,13 +104,13 @@ const DataAPI = (() => {
     return loadDemo().mods;
   }
 
-  async function addMod(name) {
+  async function addMod(name, email) {
     if (isConfigured(cfg.flows.addMod)) {
-      return await callFlow(cfg.flows.addMod, { name });
+      return await callFlow(cfg.flows.addMod, { name, email });
     }
     const store = loadDemo();
     if (!store.mods.some(m => m.name.toLowerCase() === name.toLowerCase())) {
-      store.mods.push({ name });
+      store.mods.push(blankMod(name, email));
       saveDemo(store);
     }
     return store.mods;
@@ -119,45 +122,39 @@ const DataAPI = (() => {
     }
     const store = loadDemo();
     store.mods = store.mods.filter(m => m.name !== name);
-    store.shifts = store.shifts.filter(s => s.mod !== name);
     saveDemo(store);
     return store.mods;
   }
 
-  // ---------------- SCHEDULE ----------------
-
-  async function getSchedule() {
-    if (isConfigured(cfg.flows.getSchedule)) {
-      return await callFlow(cfg.flows.getSchedule, {});
-    }
-    return loadDemo().shifts;
-  }
-
-  async function saveShift(shift) {
-    if (isConfigured(cfg.flows.saveShift)) {
-      return await callFlow(cfg.flows.saveShift, shift);
+  // day: "sun".."sat". start/end: "" (both) clears that day.
+  async function setAvailability(name, day, start, end) {
+    if (isConfigured(cfg.flows.setAvailability)) {
+      return await callFlow(cfg.flows.setAvailability, { name, day, start, end });
     }
     const store = loadDemo();
-    if (shift.id) {
-      const idx = store.shifts.findIndex(s => s.id === shift.id);
-      if (idx >= 0) store.shifts[idx] = shift;
-      else store.shifts.push(shift);
-    } else {
-      shift.id = uid();
-      store.shifts.push(shift);
+    const mod = store.mods.find(m => m.name === name);
+    if (mod) {
+      mod[day] = (start && end) ? `${start}-${end}` : "";
+      saveDemo(store);
     }
-    saveDemo(store);
-    return shift;
+    return mod;
   }
 
-  async function deleteShift(id) {
-    if (isConfigured(cfg.flows.deleteShift)) {
-      return await callFlow(cfg.flows.deleteShift, { id });
-    }
-    const store = loadDemo();
-    store.shifts = store.shifts.filter(s => s.id !== id);
-    saveDemo(store);
-    return true;
+  // Flattens each mod's day columns into shift-like objects the
+  // calendar can render: { mod, email, day, start, end }. Computed
+  // client-side — there's no separate "schedule" table anymore.
+  function deriveShifts(mods) {
+    const shifts = [];
+    (mods || []).forEach(mod => {
+      DAY_KEYS.forEach(day => {
+        const val = mod[day];
+        if (val && val.includes("-")) {
+          const [start, end] = val.split("-");
+          shifts.push({ mod: mod.name, email: mod.email, day, start, end });
+        }
+      });
+    });
+    return shifts;
   }
 
   // ---------------- CHECK IN / OUT ----------------
@@ -202,8 +199,8 @@ const DataAPI = (() => {
   }
 
   return {
-    getMods, addMod, deleteMod,
-    getSchedule, saveShift, deleteShift,
+    DAY_KEYS,
+    getMods, addMod, deleteMod, setAvailability, deriveShifts,
     checkInOut, getCheckIns,
     verifyPassword, exitEditMode,
     isDemoMode, anyDemoMode,

@@ -1,10 +1,14 @@
 /* ============================================================
    CENTIFIC MOD SCHEDULER — calendar logic
+   ============================================================
+   Data model: each mod has at most ONE shift per day (their
+   Excel row's day column). "Shifts" shown on the calendar are
+   derived from that — there's no separate schedule table.
    ============================================================ */
 
 (function () {
   const cfg = window.APP_CONFIG;
-  const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const DAY_KEYS = DataAPI.DAY_KEYS; // ["sun","mon","tue","wed","thu","fri","sat"]
   const DAY_LABELS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
   const SLOT_MIN = cfg.slotMinutes || 30;
   const SLOT_PX = 24;
@@ -46,20 +50,28 @@
     }).formatToParts(new Date());
     const map = {};
     parts.forEach(p => map[p.type] = p.value);
-    const dayIdx = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(map.weekday);
+    const shortNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    const dayIdx = shortNames.indexOf(map.weekday);
     let hour = parseInt(map.hour, 10);
     if (hour === 24) hour = 0;
     const minute = parseInt(map.minute, 10);
     return { dayIdx, minutes: hour * 60 + minute };
+  }
+  function hasShift(mod, day) {
+    return state.shifts.some(s => s.mod === mod && s.day === day);
+  }
+  function confirmOverwrite(mod, day) {
+    if (!hasShift(mod, day)) return true;
+    return confirm(`${mod} already has a shift on ${DAY_LABELS[DAY_KEYS.indexOf(day)]}. Replace it?`);
   }
 
   // ---------------- data load ----------------
 
   async function loadAll() {
     try {
-      const [mods, shifts] = await Promise.all([DataAPI.getMods(), DataAPI.getSchedule()]);
+      const mods = await DataAPI.getMods();
       state.mods = mods || [];
-      state.shifts = shifts || [];
+      state.shifts = DataAPI.deriveShifts(state.mods);
     } catch (err) {
       console.error(err);
       showTransientError("Couldn't load data from Power Automate. Check the flow URLs in config.js. Falling back to what's cached locally.");
@@ -92,6 +104,7 @@
       const li = document.createElement("li");
       li.className = "mod-chip";
       li.draggable = false;
+      if (mod.email) li.title = mod.email;
       const swatch = document.createElement("span");
       swatch.className = "swatch";
       swatch.style.background = colorForName(mod.name);
@@ -134,7 +147,7 @@
     grid.appendChild(corner);
 
     // day headers
-    DAYS.forEach((d, i) => {
+    DAY_KEYS.forEach((d, i) => {
       const h = document.createElement("div");
       h.className = "cal-header-cell";
       h.style.gridRow = "1";
@@ -160,7 +173,7 @@
 
     // day columns
     dayColEls = [];
-    DAYS.forEach((d, i) => {
+    DAY_KEYS.forEach((d, i) => {
       const col = document.createElement("div");
       col.className = "cal-day-col";
       col.style.gridRow = "2";
@@ -212,7 +225,7 @@
       col.querySelectorAll(".shift-block").forEach(el => el.remove());
     });
 
-    DAYS.forEach((d, dayIdx) => {
+    DAY_KEYS.forEach((d, dayIdx) => {
       const col = dayColEls[dayIdx];
       const dayShifts = state.shifts.filter(s => s.day === d);
       const { laneOf, totalLanes } = computeLanes(dayShifts);
@@ -230,7 +243,8 @@
         block.style.width = `calc(${widthPct}% - 6px)`;
         block.style.background = colorForName(shift.mod);
         block.innerHTML = `<span class="shift-name">${escapeHtml(shift.mod)}</span><span class="shift-time">${displayTime(start)} – ${displayTime(end)}</span>`;
-        block.dataset.id = shift.id;
+        block.dataset.mod = shift.mod;
+        block.dataset.day = shift.day;
 
         if (state.editMode) {
           const top = document.createElement("div");
@@ -305,10 +319,9 @@
       let hi = Math.max(startMin, currentMin);
       if (hi - lo < MIN_DURATION) hi = lo + 60; // simple click -> default 1hr
       hi = Math.min(hi, 24 * 60);
-      await DataAPI.saveShift({
-        id: "", mod: modName, day: DAYS[lockedDayIndex],
-        start: minutesToHHMM(lo), end: minutesToHHMM(hi), notes: "",
-      });
+      const day = DAY_KEYS[lockedDayIndex];
+      if (!confirmOverwrite(modName, day)) return;
+      await DataAPI.setAvailability(modName, day, minutesToHHMM(lo), minutesToHHMM(hi));
       await loadAll();
     }
 
@@ -325,7 +338,7 @@
     const origStart = hhmmToMinutes(shift.start);
     const origEnd = hhmmToMinutes(shift.end);
     const duration = origEnd - origStart;
-    const origDayIndex = DAYS.indexOf(shift.day);
+    const origDayIndex = DAY_KEYS.indexOf(shift.day);
     let moved = false;
     let newDayIndex = origDayIndex;
     let newStart = origStart;
@@ -347,10 +360,15 @@
         openShiftPopover(shift);
         return;
       }
-      await DataAPI.saveShift({
-        id: shift.id, mod: shift.mod, day: DAYS[newDayIndex],
-        start: minutesToHHMM(newStart), end: minutesToHHMM(newStart + duration), notes: shift.notes || "",
-      });
+      const newDay = DAY_KEYS[newDayIndex];
+      const newEnd = newStart + duration;
+      if (newDay !== shift.day) {
+        if (!confirmOverwrite(shift.mod, newDay)) { await loadAll(); return; }
+        await DataAPI.setAvailability(shift.mod, shift.day, "", "");
+        await DataAPI.setAvailability(shift.mod, newDay, minutesToHHMM(newStart), minutesToHHMM(newEnd));
+      } else {
+        await DataAPI.setAvailability(shift.mod, shift.day, minutesToHHMM(newStart), minutesToHHMM(newEnd));
+      }
       await loadAll();
     }
 
@@ -382,10 +400,7 @@
     async function onUp() {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      await DataAPI.saveShift({
-        id: shift.id, mod: shift.mod, day: shift.day,
-        start: minutesToHHMM(newStart), end: minutesToHHMM(newEnd), notes: shift.notes || "",
-      });
+      await DataAPI.setAvailability(shift.mod, shift.day, minutesToHHMM(newStart), minutesToHHMM(newEnd));
       await loadAll();
     }
 
@@ -402,7 +417,7 @@
     document.getElementById("shiftPopoverTitle").textContent = `Edit ${shift.mod}'s shift`;
     document.getElementById("shiftModName").value = shift.mod;
     const daySelect = document.getElementById("shiftDay");
-    daySelect.innerHTML = DAY_LABELS.map((d, i) => `<option value="${DAYS[i]}">${d}</option>`).join("");
+    daySelect.innerHTML = DAY_LABELS.map((d, i) => `<option value="${DAY_KEYS[i]}">${d}</option>`).join("");
     daySelect.value = shift.day;
     document.getElementById("shiftStart").value = shift.start;
     document.getElementById("shiftEnd").value = shift.end;
@@ -431,14 +446,20 @@
       errEl.style.display = "block";
       return;
     }
-    await DataAPI.saveShift({ id: popoverShift.id, mod: popoverShift.mod, day, start, end, notes: popoverShift.notes || "" });
+    if (day !== popoverShift.day) {
+      if (!confirmOverwrite(popoverShift.mod, day)) return;
+      await DataAPI.setAvailability(popoverShift.mod, popoverShift.day, "", "");
+      await DataAPI.setAvailability(popoverShift.mod, day, start, end);
+    } else {
+      await DataAPI.setAvailability(popoverShift.mod, day, start, end);
+    }
     closeShiftPopover();
     await loadAll();
   });
 
   document.getElementById("deleteShiftBtn").addEventListener("click", async () => {
     if (!confirm("Delete this shift?")) return;
-    await DataAPI.deleteShift(popoverShift.id);
+    await DataAPI.setAvailability(popoverShift.mod, popoverShift.day, "", "");
     closeShiftPopover();
     await loadAll();
   });
@@ -446,14 +467,24 @@
   // ---------------- add mod ----------------
 
   document.getElementById("addModBtn").addEventListener("click", addModHandler);
-  document.getElementById("newModInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addModHandler(); });
+  document.getElementById("newModInput").addEventListener("keydown", (e) => { if (e.key === "Enter") document.getElementById("newModEmailInput").focus(); });
+  document.getElementById("newModEmailInput").addEventListener("keydown", (e) => { if (e.key === "Enter") addModHandler(); });
 
   async function addModHandler() {
-    const input = document.getElementById("newModInput");
-    const name = input.value.trim();
-    if (!name) return;
-    input.value = "";
-    await DataAPI.addMod(name);
+    const nameInput = document.getElementById("newModInput");
+    const emailInput = document.getElementById("newModEmailInput");
+    const name = nameInput.value.trim();
+    const email = emailInput.value.trim();
+    const errEl = document.getElementById("addModError");
+    if (!name || !email) {
+      errEl.textContent = "Please enter both a name and an email.";
+      errEl.style.display = "block";
+      return;
+    }
+    errEl.style.display = "none";
+    nameInput.value = "";
+    emailInput.value = "";
+    await DataAPI.addMod(name, email);
     await loadAll();
   }
 
@@ -464,7 +495,7 @@
     document.getElementById("modePill").className = "mode-pill " + (on ? "edit" : "display");
     document.getElementById("modePill").innerHTML = `<span class="dot"></span>${on ? "Edit Mode" : "Display Mode"}`;
     document.getElementById("toggleModeBtn").textContent = on ? "Exit Edit Mode" : "Enter Edit Mode";
-    document.getElementById("addModRow").style.display = on ? "flex" : "none";
+    document.getElementById("addModRow").style.display = on ? "block" : "none";
     document.getElementById("sidebarHelp").style.display = on ? "block" : "none";
     renderSidebar();
     renderShifts();
