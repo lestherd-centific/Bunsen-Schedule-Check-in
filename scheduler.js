@@ -17,6 +17,8 @@
   const TOTAL_SLOTS = (24 * 60) / SLOT_MIN;
   const BODY_HEIGHT = TOTAL_SLOTS * SLOT_PX;
   const MIN_DURATION = SLOT_MIN;
+  const OPEN_HOUR = (cfg.openHour != null) ? cfg.openHour : 9;   // 9 AM
+  const CLOSE_HOUR = (cfg.closeHour != null) ? cfg.closeHour : 21; // 9 PM
 
   let state = { mods: [], shifts: [], editMode: false };
   let dayColEls = [];
@@ -164,7 +166,7 @@
     timeCol.style.height = BODY_HEIGHT + "px";
     for (let h = 0; h < 24; h++) {
       const lbl = document.createElement("div");
-      lbl.className = "cal-time-label";
+      lbl.className = "cal-time-label" + ((h < OPEN_HOUR || h >= CLOSE_HOUR) ? " closed" : "");
       lbl.style.top = (h * HOUR_PX) + "px";
       lbl.textContent = displayTime(h * 60).replace(":00", "");
       timeCol.appendChild(lbl);
@@ -180,6 +182,21 @@
       col.style.gridColumn = String(i + 2);
       col.style.height = BODY_HEIGHT + "px";
       col.dataset.dayIndex = String(i);
+
+      // Grey out closed hours (before OPEN_HOUR and from CLOSE_HOUR on).
+      // Purely visual — doesn't block scheduling in these hours.
+      const before = document.createElement("div");
+      before.className = "closed-hours-overlay";
+      before.style.top = "0px";
+      before.style.height = (OPEN_HOUR * HOUR_PX) + "px";
+      col.appendChild(before);
+
+      const after = document.createElement("div");
+      after.className = "closed-hours-overlay";
+      after.style.top = (CLOSE_HOUR * HOUR_PX) + "px";
+      after.style.height = ((24 - CLOSE_HOUR) * HOUR_PX) + "px";
+      col.appendChild(after);
+
       grid.appendChild(col);
       dayColEls.push(col);
     });

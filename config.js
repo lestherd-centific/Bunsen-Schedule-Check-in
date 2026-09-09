@@ -54,6 +54,12 @@ window.APP_CONFIG = {
   slotMinutes: 30,                    // calendar snapping granularity
   weekStartsOn: "Sun",                // fixed: Sun -> Sat, 24 hours
 
+  // Hours outside this range are shown greyed-out on the calendar as
+  // closed hours (still fully scheduleable — this is visual only).
+  // 24-hour, e.g. 9 = 9 AM, 21 = 9 PM.
+  openHour: 9,
+  closeHour: 21,
+
   // Color palette cycled through for mod chips / shift blocks
   modColors: ["#5B2A8C", "#EC1E79", "#2563EB", "#0EA5A4", "#D97706", "#7C3AED", "#DB2777", "#059669"],
 };
