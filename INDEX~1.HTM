@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mod Scheduler — Centific</title>
+<link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+
+<header class="app-header">
+  <div class="brand">
+    <span class="brand-word">centi<span class="accent">fic</span></span>
+    <span class="brand-sub">Mod Scheduler</span>
+  </div>
+  <nav class="app-nav">
+    <a href="index.html" class="active">Scheduler</a>
+    <a href="checkin.html">Check In / Out</a>
+  </nav>
+  <div class="header-right">
+    <span id="ptClock" class="pt-clock">--:--</span>
+  </div>
+</header>
+
+<div class="page-body">
+
+  <div id="demoBanner" class="banner banner-demo" style="display:none;">
+    ⚠️ <span>Demo mode: this browser only. Connect Power Automate (see <code>SETUP-GUIDE.md</code>) so the whole team sees the same schedule.</span>
+  </div>
+
+  <div class="mode-toggle-row">
+    <h1 class="section-title">
+      <span class="eyebrow">Weekly Roster</span>
+      <span class="headline">Mod Schedule — Pacific Time</span>
+    </h1>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span id="modePill" class="mode-pill display"><span class="dot"></span>Display Mode</span>
+      <button id="toggleModeBtn" class="btn btn-secondary btn-sm">Enter Edit Mode</button>
+    </div>
+  </div>
+
+  <div class="scheduler-layout">
+
+    <!-- Sidebar -->
+    <div class="card card-pad" id="sidebar">
+      <h2 class="sidebar-title">Mods</h2>
+
+      <div id="addModRow" class="mod-add-row" style="display:none;">
+        <input type="text" id="newModInput" placeholder="Add mod name…" />
+        <button id="addModBtn" class="btn btn-primary btn-sm">Add</button>
+      </div>
+
+      <ul id="modList" class="mod-list"></ul>
+
+      <p class="help-note" id="sidebarHelp">
+        Drag a mod's name onto the calendar and drag down to set the shift length.
+        Click an existing shift to fine‑tune its start/end time.
+      </p>
+    </div>
+
+    <!-- Calendar -->
+    <div class="calendar-scroll-wrap">
+      <div id="calendarGrid" class="calendar-grid"></div>
+    </div>
+
+  </div>
+
+  <p class="footer-note">© CENTIFIC. INTERNAL TOOL. ALL TIMES SHOWN IN PACIFIC TIME.</p>
+</div>
+
+<!-- Password prompt -->
+<div id="passwordScrim" class="overlay-scrim" style="display:none;">
+  <div class="popover">
+    <h3>Enter Edit Mode</h3>
+    <div class="field">
+      <label class="field-label">Edit password</label>
+      <input type="password" id="editPasswordInput" placeholder="••••••••" />
+    </div>
+    <p id="passwordError" class="banner banner-error" style="display:none;">Incorrect password.</p>
+    <div class="popover-actions">
+      <button class="btn btn-ghost" id="cancelPasswordBtn">Cancel</button>
+      <button class="btn btn-primary" id="submitPasswordBtn">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- Shift edit popover -->
+<div id="shiftScrim" class="overlay-scrim" style="display:none;">
+  <div class="popover">
+    <h3 id="shiftPopoverTitle">Edit Shift</h3>
+    <div class="field">
+      <label class="field-label">Mod</label>
+      <input type="text" id="shiftModName" disabled />
+    </div>
+    <div class="field">
+      <label class="field-label">Day</label>
+      <select id="shiftDay"></select>
+    </div>
+    <div class="popover-row">
+      <div class="field">
+        <label class="field-label">Start (PT)</label>
+        <input type="time" id="shiftStart" step="900" />
+      </div>
+      <div class="field">
+        <label class="field-label">End (PT)</label>
+        <input type="time" id="shiftEnd" step="900" />
+      </div>
+    </div>
+    <p id="shiftError" class="banner banner-error" style="display:none;"></p>
+    <div class="popover-actions">
+      <button class="btn btn-danger" id="deleteShiftBtn">Delete</button>
+      <div class="right-group">
+        <button class="btn btn-ghost" id="cancelShiftBtn">Cancel</button>
+        <button class="btn btn-primary" id="saveShiftBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="assets/config.js"></script>
+<script src="assets/data.js"></script>
+<script src="assets/scheduler.js"></script>
+</body>
+</html>
