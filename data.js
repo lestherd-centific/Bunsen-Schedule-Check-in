@@ -185,6 +185,24 @@ const DataAPI = (() => {
     return mod;
   }
 
+  // Cleans up a time fragment pulled out of the Excel cell into the exact
+  // "HH:MM" (zero-padded, no stray whitespace) shape a native
+  // <input type="time"> will accept. Excel cells are sometimes edited by
+  // hand (e.g. "13:00 - 15:30" with a space around the dash, or "9:00"
+  // without a leading zero) — the calendar math (hhmmToMinutes) is loose
+  // enough to tolerate that, but the time-picker inputs are not: they
+  // silently reject anything that isn't an exact match and just render
+  // blank, which is why a shift can look right on the calendar block but
+  // show an empty Start/End field once you click it.
+  function normalizeTimeFragment(s) {
+    if (!s) return "";
+    const parts = s.trim().split(":");
+    if (parts.length !== 2) return s.trim();
+    const h = parts[0].trim().padStart(2, "0");
+    const m = parts[1].trim().padStart(2, "0");
+    return `${h}:${m}`;
+  }
+
   // Flattens each mod's day columns into shift-like objects the
   // calendar can render: { mod, email, day, start, end }. Computed
   // client-side — there's no separate "schedule" table anymore.
@@ -195,7 +213,13 @@ const DataAPI = (() => {
         const val = mod[day];
         if (val && val.includes("-")) {
           const [start, end] = val.split("-");
-          shifts.push({ mod: mod.name, email: mod.email, day, start, end });
+          shifts.push({
+            mod: mod.name,
+            email: mod.email,
+            day,
+            start: normalizeTimeFragment(start),
+            end: normalizeTimeFragment(end),
+          });
         }
       });
     });
