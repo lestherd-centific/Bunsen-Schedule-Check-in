@@ -26,6 +26,7 @@ window.APP_CONFIG = {
                             //   each day value is "" (off) or "HH:MM-HH:MM" (24hr, Pacific Time)
     addMod:          "",   // POST { name, email }
     deleteMod:       "",   // POST { name }
+    updateMod:       "",   // POST { oldName, name, email } -> renames a mod and/or updates their email
     setAvailability: "https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/05/workflows/c61e403d17c34ce5acd4cf8957633c67/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=VfYShrTm9txQ0R5NlMdhDFLzb9K6CnNHUh6ujQg9lr8",   // POST { name, day, start, end }  (day = "sun".."sat"; start/end "" clears that day)
 
     // Check-in / check-out log

@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mod Scheduler — Centific</title>
+<script src="theme.js"></script>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -19,6 +20,7 @@
   </nav>
   <div class="header-right">
     <span id="ptClock" class="pt-clock">--:--</span>
+    <button id="themeToggleBtn" class="theme-toggle-btn" type="button" title="Toggle light / dark mode" aria-label="Toggle light / dark mode">🌙</button>
   </div>
 </header>
 
@@ -58,15 +60,25 @@
 
       <ul id="modList" class="mod-list"></ul>
 
-      <p class="help-note" id="sidebarHelp">
+      <p class="help-note">
+        Click a mod's name to view just their schedule on the calendar.
+      </p>
+      <p class="help-note" id="sidebarHelp" style="display:none;">
         Drag a mod's name onto the calendar and drag down to set the shift length.
-        Click an existing shift to fine‑tune its start/end time.
+        Click an existing shift to fine‑tune its start/end time. Use the pencil
+        icon to rename a mod or update their email.
       </p>
     </div>
 
     <!-- Calendar -->
-    <div class="calendar-scroll-wrap">
-      <div id="calendarGrid" class="calendar-grid"></div>
+    <div class="calendar-col">
+      <div id="focusBanner" class="focus-banner" style="display:none;">
+        <span id="focusBannerText"></span>
+        <button id="clearFocusBtn" class="btn btn-ghost btn-sm" type="button">Show everyone</button>
+      </div>
+      <div class="calendar-scroll-wrap">
+        <div id="calendarGrid" class="calendar-grid"></div>
+      </div>
     </div>
 
   </div>
@@ -118,6 +130,29 @@
       <div class="right-group">
         <button class="btn btn-ghost" id="cancelShiftBtn">Cancel</button>
         <button class="btn btn-primary" id="saveShiftBtn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Mod edit popover (rename / update email) -->
+<div id="modEditScrim" class="overlay-scrim" style="display:none;">
+  <div class="popover">
+    <h3>Edit Mod</h3>
+    <div class="field">
+      <label class="field-label">Name</label>
+      <input type="text" id="editModNameInput" />
+    </div>
+    <div class="field">
+      <label class="field-label">Email</label>
+      <input type="email" id="editModEmailInput" />
+    </div>
+    <p id="editModError" class="banner banner-error" style="display:none;"></p>
+    <div class="popover-actions">
+      <button class="btn btn-danger" id="deleteModEditBtn">Remove Mod</button>
+      <div class="right-group">
+        <button class="btn btn-ghost" id="cancelModEditBtn">Cancel</button>
+        <button class="btn btn-primary" id="saveModEditBtn">Save</button>
       </div>
     </div>
   </div>

@@ -18,11 +18,11 @@ check-in/out first and leave the schedule in demo mode a while longer.
  GitHub Pages (this site)  --HTTP-->  Power Automate Flows  <-->  Excel file (OneDrive/SharePoint)
    index.html / checkin.html                 |
    (calls the URLs in config.js)     each flow = one "endpoint":
-                                       VerifyPassword, GetMods, AddMod, DeleteMod,
+                                       VerifyPassword, GetMods, AddMod, DeleteMod, UpdateMod,
                                        SetAvailability, CheckInOut, GetCheckIns
 ```
 
-You'll create **one Excel workbook** with **three tabs**, then **seven Power Automate
+You'll create **one Excel workbook** with **three tabs**, then **eight Power Automate
 flows** (one per action above), then paste each flow's URL into `config.js`.
 
 Data model, in short: each mod is one row with a time range (or blank) in each day-of-week
@@ -69,7 +69,7 @@ easiest way to watch rows appear live.
 
 ## Part 2 — Build the Power Automate flows
 
-You'll repeat a similar pattern seven times. Go to [make.powerautomate.com](https://make.powerautomate.com) → **My flows** → **New flow** → **Instant cloud flow** → trigger **"When an HTTP request is received."**
+You'll repeat a similar pattern eight times. Go to [make.powerautomate.com](https://make.powerautomate.com) → **My flows** → **New flow** → **Instant cloud flow** → trigger **"When an HTTP request is received."**
 
 > **Note on the HTTP trigger:** "When an HTTP request is received" is a Premium trigger in
 > some Power Automate plans. Most Microsoft 365 E3/E5 and Power Automate per-user plans
@@ -167,6 +167,22 @@ You'll repeat a similar pattern seven times. Go to [make.powerautomate.com](http
   filter query `Email eq '@{json(triggerBody())?['email']}'`; otherwise return all rows.
 - Response: array shaped like `[{ "email": "...", "action": "in", "timestampUtc": "..." }, ...]`.
 
+### Flow 8 — `UpdateMod` (write — renames a mod and/or updates their email)
+- Trigger body: `{ "oldName": "Alex", "name": "Alexandra", "email": "alexandra@centific.com", "editKey": "..." }`
+- Action: **List rows present in a table** (`Mods`), filter query
+  `Name eq '@{json(triggerBody())?['oldName']}'`.
+- Action: **Update a row**, keyed to that row (use the Expression pattern from Flow 5 if you
+  hit the "Apply to each" auto-wrap issue — pull the row via
+  `first(body('List_rows_present_in_a_table')?['value'])?['ItemInternalId']` or similar, not
+  Dynamic Content), setting `Name` = `json(triggerBody())?['name']` and `Email` =
+  `json(triggerBody())?['email']`. Leave the day columns untouched (blank in this action
+  means "don't change").
+- Response: `{ "ok": true }`.
+- This is the flow behind the sidebar's pencil icon (click a mod's name to view just their
+  schedule; in Edit Mode, click the pencil next to it to rename them or fix their email).
+  Until you build this flow, renames made through the pencil icon only save locally in that
+  browser (same demo-mode fallback as the other unwired flows).
+
 ---
 
 ## Part 3 — Wire it up
@@ -183,9 +199,9 @@ You'll repeat a similar pattern seven times. Go to [make.powerautomate.com](http
 
 1. Create a new GitHub repository (can be private if your org allows private Pages, or
    public — there's no sensitive data in the code itself, only in your Excel file/flows).
-2. Upload every file (`index.html`, `checkin.html`, `style.css`, `config.js`, `data.js`,
-   `scheduler.js`, `checkin.js`) straight into the **root** of the repo — there are no
-   subfolders to worry about.
+2. Upload every file (`index.html`, `checkin.html`, `style.css`, `theme.js`, `config.js`,
+   `data.js`, `scheduler.js`, `checkin.js`) straight into the **root** of the repo — there are
+   no subfolders to worry about.
 3. In the repo, go to **Settings → Pages** → under "Build and deployment," set **Source** to
    "Deploy from a branch," pick your branch (e.g. `main`) and folder `/root`, then **Save**.
 4. GitHub gives you a URL like `https://your-org.github.io/your-repo/` — share that with
@@ -231,9 +247,17 @@ If the live URL 404s, work through these in order:
 - **Weekly template, not dated weeks**: the schedule is a repeating Sunday–Saturday weekly
   template (no specific calendar dates). If you'd rather schedule specific week-of dates
   (e.g. "week of Sept 14"), let me know and we'll adjust the data model and Excel columns.
-- **Overlapping shifts**: if two different mods are scheduled at the same time, their blocks
-  sit side-by-side on the calendar rather than overlapping — with many concurrent mods,
-  blocks will get narrow.
+- **Overlapping shifts**: if multiple mods are scheduled at the same time, their blocks sit
+  side-by-side ("lanes") on the calendar rather than overlapping. Comfortably supports up to
+  4 mods stacked in the same hour (text shrinks a bit at 3+, and the time subtext hides at 4+
+  to keep it legible) — hover any block to see the full name and time in a tooltip.
+- **Quick view / edit a mod**: click a mod's name in the sidebar (in either Edit or Display
+  Mode) to filter the calendar down to just their shifts — click "Show everyone" (or the same
+  name again) to clear it. In Edit Mode, the pencil icon next to a name opens a small popover
+  to rename them or update their email (see Flow 8, `UpdateMod`, above).
+- **Light / dark mode**: the sun/moon button in the header toggles the theme and remembers
+  your choice per browser. Until you click it, the app follows your OS/browser's light or
+  dark setting automatically.
 - All calendar times and check-in timestamps are displayed in **Pacific Time** and
   auto-adjust for daylight saving.
 

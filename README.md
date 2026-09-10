@@ -31,10 +31,11 @@ root of your GitHub repo.
 ```
 index.html         Scheduler page
 checkin.html        Check-in / out page
-style.css           Centific theme
+style.css           Centific theme (light + dark)
+theme.js            Light/dark mode toggle (loaded first, on both pages)
 config.js           <-- edit this: Power Automate flow URLs, demo password
 data.js             Talks to Power Automate, falls back to local demo storage
-scheduler.js        Calendar drag/resize/edit logic
+scheduler.js        Calendar drag/resize/edit logic, mod quick-view/edit
 checkin.js          Check-in/out page logic
 SETUP-GUIDE.md       Power Automate + Excel + GitHub Pages walkthrough
 ```

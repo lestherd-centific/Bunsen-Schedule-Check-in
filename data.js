@@ -135,6 +135,22 @@ const DataAPI = (() => {
     return store.mods;
   }
 
+  // Renames a mod and/or updates their email. oldName identifies the
+  // Excel row (Key Column); name/email are the new values.
+  async function updateMod(oldName, name, email) {
+    if (isConfigured(cfg.flows.updateMod)) {
+      return await callFlow(cfg.flows.updateMod, { oldName, name, email });
+    }
+    const store = loadDemo();
+    const mod = store.mods.find(m => m.name === oldName);
+    if (mod) {
+      mod.name = name;
+      mod.email = email;
+      saveDemo(store);
+    }
+    return mod;
+  }
+
   // day: "sun".."sat". start/end: "" (both) clears that day.
   async function setAvailability(name, day, start, end) {
     if (isConfigured(cfg.flows.setAvailability)) {
@@ -209,7 +225,7 @@ const DataAPI = (() => {
 
   return {
     DAY_KEYS,
-    getMods, addMod, deleteMod, setAvailability, deriveShifts,
+    getMods, addMod, deleteMod, updateMod, setAvailability, deriveShifts,
     checkInOut, getCheckIns,
     verifyPassword, exitEditMode,
     isDemoMode, anyDemoMode,

@@ -147,6 +147,22 @@
   tickClock();
   setInterval(tickClock, 15000);
 
+  // ---------------- theme toggle ----------------
+  function updateThemeBtn() {
+    const btn = document.getElementById("themeToggleBtn");
+    if (btn && window.ThemeToggle) {
+      btn.textContent = window.ThemeToggle.current() === "dark" ? "☀️" : "🌙";
+    }
+  }
+  const themeBtn = document.getElementById("themeToggleBtn");
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      window.ThemeToggle.toggle();
+      updateThemeBtn();
+    });
+    updateThemeBtn();
+  }
+
   // restore last-used email for convenience
   try {
     const remembered = localStorage.getItem(REMEMBER_KEY);

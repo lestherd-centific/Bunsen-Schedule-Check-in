@@ -149,6 +149,23 @@ a { color: inherit; }
   font-weight: 600;
 }
 
+.theme-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background .15s ease, transform .08s ease;
+}
+.theme-toggle-btn:hover { background: rgba(255,255,255,0.22); }
+.theme-toggle-btn:active { transform: translateY(1px); }
+
 /* ---------- Layout ---------- */
 .page-body {
   max-width: 1400px;
@@ -368,29 +385,62 @@ label.field-label {
   border-radius: 9px;
   background: var(--bg-subtle);
   border: 1px solid transparent;
-  cursor: grab;
+  cursor: pointer;
   font-size: 13px;
   font-weight: 600;
   user-select: none;
+  transition: background .12s ease, border-color .12s ease;
 }
-.mod-chip:active { cursor: grabbing; }
+.mod-chip.editable-chip { cursor: grab; }
+.mod-chip.editable-chip:active { cursor: grabbing; }
+.mod-chip:hover { background: var(--border-soft); }
+.mod-chip.focused {
+  background: var(--bg-subtle);
+  border-color: var(--c-violet);
+  box-shadow: 0 0 0 1px var(--c-violet) inset;
+}
 .mod-chip .swatch {
   width: 10px; height: 10px; border-radius: 3px; flex: none;
 }
 .mod-chip .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mod-chip .remove-btn {
+.mod-chip .chip-actions { display: flex; align-items: center; gap: 2px; flex: none; }
+.mod-chip .icon-btn {
   border: none;
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1;
-  padding: 2px 4px;
+  padding: 4px 5px;
   border-radius: 4px;
 }
-.mod-chip .remove-btn:hover { background: #ffe4e4; color: var(--status-red); }
+.mod-chip .icon-btn.edit-btn:hover { background: var(--border-soft); color: var(--c-violet); }
+.mod-chip .icon-btn.remove-btn { font-size: 15px; }
+.mod-chip .icon-btn.remove-btn:hover { background: #ffe4e4; color: var(--status-red); }
 
 .mod-chip.dragging-source { opacity: 0.4; }
+
+/* ---------- Focus filter banner ---------- */
+.calendar-col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.focus-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: #FDEAF3;
+  color: var(--c-violet-dark);
+  border: 1px solid #F7C7E1;
+  border-radius: var(--radius-md);
+  padding: 8px 8px 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+}
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    .focus-banner { background: #3A2038; color: #F9C9E4; border-color: #5A2E52; }
+  }
+}
+:root[data-theme="dark"] .focus-banner { background: #3A2038; color: #F9C9E4; border-color: #5A2E52; }
 
 .help-note {
   font-size: 12px;
@@ -509,10 +559,19 @@ label.field-label {
   box-shadow: 0 2px 6px rgba(36,16,64,0.22);
   line-height: 1.3;
 }
-.shift-block .shift-name { display: block; font-weight: 700; }
-.shift-block .shift-time { display: block; font-weight: 500; opacity: 0.92; font-size: 10.5px; }
+.shift-block .shift-name { display: block; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shift-block .shift-time { display: block; font-weight: 500; opacity: 0.92; font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .shift-block.editable { cursor: grab; }
 .shift-block.editable:active { cursor: grabbing; }
+
+/* When several mods overlap the same hours, each lane gets narrower —
+   tighten padding/type so 3-4 side-by-side blocks stay legible. */
+.shift-block.lanes-3,
+.shift-block.lanes-4plus {
+  padding: 3px 5px;
+  font-size: 10.5px;
+}
+.shift-block.lanes-4plus .shift-time { display: none; }
 
 .resize-handle {
   position: absolute;

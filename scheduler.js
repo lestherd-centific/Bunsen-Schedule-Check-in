@@ -20,7 +20,7 @@
   const OPEN_HOUR = (cfg.openHour != null) ? cfg.openHour : 9;   // 9 AM
   const CLOSE_HOUR = (cfg.closeHour != null) ? cfg.closeHour : 21; // 9 PM
 
-  let state = { mods: [], shifts: [], editMode: false };
+  let state = { mods: [], shifts: [], editMode: false, focusedMod: null };
   let dayColEls = [];
 
   // ---------------- utils ----------------
@@ -79,8 +79,13 @@
       showTransientError("Couldn't load data from Power Automate. Check the flow URLs in config.js. Falling back to what's cached locally.");
     }
     document.getElementById("demoBanner").style.display = DataAPI.anyDemoMode() ? "flex" : "none";
+    // If the focused mod was renamed or removed, drop the stale filter.
+    if (state.focusedMod && !state.mods.some(m => m.name === state.focusedMod)) {
+      state.focusedMod = null;
+    }
     renderSidebar();
     renderShifts();
+    renderFocusBanner();
   }
 
   function showTransientError(msg) {
@@ -104,7 +109,7 @@
     }
     state.mods.forEach(mod => {
       const li = document.createElement("li");
-      li.className = "mod-chip";
+      li.className = "mod-chip" + (state.editMode ? " editable-chip" : "") + (state.focusedMod === mod.name ? " focused" : "");
       li.draggable = false;
       if (mod.email) li.title = mod.email;
       const swatch = document.createElement("span");
@@ -115,23 +120,74 @@
       name.textContent = mod.name;
       li.appendChild(swatch);
       li.appendChild(name);
+
+      const actions = document.createElement("span");
+      actions.className = "chip-actions";
+
       if (state.editMode) {
+        const edit = document.createElement("button");
+        edit.className = "icon-btn edit-btn";
+        edit.innerHTML = "&#9998;"; // pencil
+        edit.title = "Edit name / email";
+        edit.type = "button";
+        edit.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openModEditPopover(mod);
+        });
+        actions.appendChild(edit);
+
         const rm = document.createElement("button");
-        rm.className = "remove-btn";
+        rm.className = "icon-btn remove-btn";
         rm.innerHTML = "&times;";
         rm.title = "Remove mod";
+        rm.type = "button";
         rm.addEventListener("click", async (e) => {
           e.stopPropagation();
           if (!confirm(`Remove ${mod.name}? Their shifts will also be removed.`)) return;
           await DataAPI.deleteMod(mod.name);
           await loadAll();
         });
-        li.appendChild(rm);
-        li.addEventListener("mousedown", (e) => startCreateDrag(e, mod.name));
+        actions.appendChild(rm);
+
+        li.addEventListener("mousedown", (e) => {
+          if (e.target === edit || e.target === rm) return;
+          startCreateDrag(e, mod.name);
+        });
       }
+      li.appendChild(actions);
+
+      // Clicking the chip (not the pencil/remove buttons) filters the
+      // calendar down to just this mod — works in both Edit and Display
+      // mode. Click the same mod again (or "Show everyone") to clear it.
+      li.addEventListener("click", () => {
+        state.focusedMod = (state.focusedMod === mod.name) ? null : mod.name;
+        renderSidebar();
+        renderShifts();
+        renderFocusBanner();
+      });
+
       list.appendChild(li);
     });
   }
+
+  // ---------------- focus filter banner ----------------
+
+  function renderFocusBanner() {
+    const banner = document.getElementById("focusBanner");
+    if (!state.focusedMod) {
+      banner.style.display = "none";
+      return;
+    }
+    document.getElementById("focusBannerText").textContent = `Showing ${state.focusedMod}'s schedule only`;
+    banner.style.display = "flex";
+  }
+
+  document.getElementById("clearFocusBtn").addEventListener("click", () => {
+    state.focusedMod = null;
+    renderSidebar();
+    renderShifts();
+    renderFocusBanner();
+  });
 
   // ---------------- calendar skeleton (built once) ----------------
 
@@ -244,7 +300,8 @@
 
     DAY_KEYS.forEach((d, dayIdx) => {
       const col = dayColEls[dayIdx];
-      const dayShifts = state.shifts.filter(s => s.day === d);
+      let dayShifts = state.shifts.filter(s => s.day === d);
+      if (state.focusedMod) dayShifts = dayShifts.filter(s => s.mod === state.focusedMod);
       const { laneOf, totalLanes } = computeLanes(dayShifts);
 
       dayShifts.forEach(shift => {
@@ -253,12 +310,14 @@
         const widthPct = 100 / totalLanes;
 
         const block = document.createElement("div");
-        block.className = "shift-block" + (state.editMode ? " editable" : "");
+        const laneClass = totalLanes >= 4 ? " lanes-4plus" : (totalLanes === 3 ? " lanes-3" : "");
+        block.className = "shift-block" + (state.editMode ? " editable" : "") + laneClass;
         block.style.top = ((start / 60) * HOUR_PX) + "px";
         block.style.height = Math.max(16, ((end - start) / 60) * HOUR_PX) + "px";
         block.style.left = `calc(${lane * widthPct}% + 3px)`;
         block.style.width = `calc(${widthPct}% - 6px)`;
         block.style.background = colorForName(shift.mod);
+        block.title = `${shift.mod} — ${DAY_LABELS[dayIdx]} ${displayTime(start)} – ${displayTime(end)} (Pacific Time)`;
         block.innerHTML = `<span class="shift-name">${escapeHtml(shift.mod)}</span><span class="shift-time">${displayTime(start)} – ${displayTime(end)}</span>`;
         block.dataset.mod = shift.mod;
         block.dataset.day = shift.day;
@@ -512,6 +571,75 @@
     emailInput.value = "";
     await DataAPI.addMod(name, email);
     await loadAll();
+  }
+
+  // ---------------- mod edit popover (rename / update email) ----------------
+
+  let editingModOriginalName = null;
+
+  function openModEditPopover(mod) {
+    editingModOriginalName = mod.name;
+    document.getElementById("editModNameInput").value = mod.name;
+    document.getElementById("editModEmailInput").value = mod.email || "";
+    document.getElementById("editModError").style.display = "none";
+    document.getElementById("modEditScrim").style.display = "flex";
+  }
+
+  function closeModEditPopover() {
+    editingModOriginalName = null;
+    document.getElementById("modEditScrim").style.display = "none";
+  }
+
+  document.getElementById("cancelModEditBtn").addEventListener("click", closeModEditPopover);
+  document.getElementById("modEditScrim").addEventListener("click", (e) => {
+    if (e.target.id === "modEditScrim") closeModEditPopover();
+  });
+
+  document.getElementById("saveModEditBtn").addEventListener("click", async () => {
+    const name = document.getElementById("editModNameInput").value.trim();
+    const email = document.getElementById("editModEmailInput").value.trim();
+    const errEl = document.getElementById("editModError");
+    if (!name || !email) {
+      errEl.textContent = "Please enter both a name and an email.";
+      errEl.style.display = "block";
+      return;
+    }
+    const dup = state.mods.some(m => m.name !== editingModOriginalName && m.name.toLowerCase() === name.toLowerCase());
+    if (dup) {
+      errEl.textContent = "A mod with that name already exists.";
+      errEl.style.display = "block";
+      return;
+    }
+    errEl.style.display = "none";
+    await DataAPI.updateMod(editingModOriginalName, name, email);
+    if (state.focusedMod === editingModOriginalName) state.focusedMod = name;
+    closeModEditPopover();
+    await loadAll();
+  });
+
+  document.getElementById("deleteModEditBtn").addEventListener("click", async () => {
+    if (!confirm(`Remove ${editingModOriginalName}? Their shifts will also be removed.`)) return;
+    await DataAPI.deleteMod(editingModOriginalName);
+    if (state.focusedMod === editingModOriginalName) state.focusedMod = null;
+    closeModEditPopover();
+    await loadAll();
+  });
+
+  // ---------------- theme toggle ----------------
+
+  function updateThemeBtn() {
+    const btn = document.getElementById("themeToggleBtn");
+    if (btn && window.ThemeToggle) {
+      btn.textContent = window.ThemeToggle.current() === "dark" ? "☀️" : "🌙";
+    }
+  }
+  const themeBtn = document.getElementById("themeToggleBtn");
+  if (themeBtn) {
+    themeBtn.addEventListener("click", () => {
+      window.ThemeToggle.toggle();
+      updateThemeBtn();
+    });
+    updateThemeBtn();
   }
 
   // ---------------- edit mode / password ----------------
