@@ -399,6 +399,17 @@ label.field-label {
   border-color: var(--c-violet);
   box-shadow: 0 0 0 1px var(--c-violet) inset;
 }
+.mod-chip.placing {
+  background: #FDEAF3;
+  border-color: var(--c-pink);
+  box-shadow: 0 0 0 1px var(--c-pink) inset;
+}
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    .mod-chip.placing { background: #3A2038; }
+  }
+}
+:root[data-theme="dark"] .mod-chip.placing { background: #3A2038; }
 .mod-chip .swatch {
   width: 10px; height: 10px; border-radius: 3px; flex: none;
 }
@@ -417,6 +428,10 @@ label.field-label {
 .mod-chip .icon-btn.edit-btn:hover { background: var(--border-soft); color: var(--c-violet); }
 .mod-chip .icon-btn.remove-btn { font-size: 15px; }
 .mod-chip .icon-btn.remove-btn:hover { background: #ffe4e4; color: var(--status-red); }
+.mod-chip .icon-btn.place-btn { font-weight: 700; }
+.mod-chip .icon-btn.place-btn:hover { background: var(--border-soft); color: var(--c-pink); }
+.mod-chip .icon-btn.place-btn.active { background: var(--c-pink); color: #fff; }
+.mod-chip .icon-btn.place-btn.active:hover { background: var(--c-pink); }
 
 .mod-chip.dragging-source { opacity: 0.4; }
 
@@ -441,6 +456,10 @@ label.field-label {
   }
 }
 :root[data-theme="dark"] .focus-banner { background: #3A2038; color: #F9C9E4; border-color: #5A2E52; }
+
+.placing-banner { background: var(--g-stat-card); color: #fff; border-color: transparent; }
+
+.calendar-grid.placing-active .cal-day-col { cursor: crosshair; }
 
 .help-note {
   font-size: 12px;

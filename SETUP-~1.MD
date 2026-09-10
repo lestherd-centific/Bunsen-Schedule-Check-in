@@ -151,7 +151,15 @@ You'll repeat a similar pattern eight times. Go to [make.powerautomate.com](http
 - Action: **Update a row**, keyed to that row, setting the column matching `day` (map
   `sun/mon/tue/wed/thu/fri/sat` to the `Sun/Mon/Tue/Wed/Thu/Fri/Sat` columns — a Switch
   action on `json(triggerBody())?['day']` is the simplest way) to
-  `@{if(equals(json(triggerBody())?['start'], ''), '', concat(json(triggerBody())?['start'], '-', json(triggerBody())?['end']))}`.
+  `if(and(equals(json(triggerBody())?['start'], ''), equals(json(triggerBody())?['end'], '')), ' ', concat(json(triggerBody())?['start'], '-', json(triggerBody())?['end']))`
+  (entered via the **Expression** editor, not typed as plain text — see the callout above).
+  - **Important**: the "clear" branch returns a single **space** `' '`, not an empty string
+    `''`. Power Automate's Excel "Update a row" action silently treats a field that evaluates
+    to a true empty string as "left blank → don't change this column," so clearing a shift
+    would otherwise appear to succeed (the flow runs fine) while Excel keeps the old value.
+    A lone space is a real, non-empty value, so the update actually applies — and the app
+    already treats any day value that doesn't contain a `-` (a lone space included) as
+    "not scheduled," so nothing else needs to change for this to display as cleared.
 - Response: `{ "ok": true }`.
 
 ### Flow 6 — `CheckInOut`

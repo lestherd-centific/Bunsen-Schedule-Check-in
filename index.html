@@ -64,14 +64,20 @@
         Click a mod's name to view just their schedule on the calendar.
       </p>
       <p class="help-note" id="sidebarHelp" style="display:none;">
-        Drag a mod's name onto the calendar and drag down to set the shift length.
-        Click an existing shift to fine‑tune its start/end time. Use the pencil
-        icon to rename a mod or update their email.
+        Click the <strong>+</strong> next to a mod, then click a time slot on the calendar to
+        drop a 1‑hour shift there — no dragging needed. (You can still drag a mod's name onto
+        the calendar instead, if you want to draw a custom-length shift in one motion.) Click
+        an existing shift to fine‑tune its start/end time, or the pencil icon to rename a mod
+        or update their email.
       </p>
     </div>
 
     <!-- Calendar -->
     <div class="calendar-col">
+      <div id="placingBanner" class="focus-banner placing-banner" style="display:none;">
+        <span id="placingBannerText"></span>
+        <button id="cancelPlacingBtn" class="btn btn-ghost btn-sm" type="button">Cancel (Esc)</button>
+      </div>
       <div id="focusBanner" class="focus-banner" style="display:none;">
         <span id="focusBannerText"></span>
         <button id="clearFocusBtn" class="btn btn-ghost btn-sm" type="button">Show everyone</button>

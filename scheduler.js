@@ -17,10 +17,11 @@
   const TOTAL_SLOTS = (24 * 60) / SLOT_MIN;
   const BODY_HEIGHT = TOTAL_SLOTS * SLOT_PX;
   const MIN_DURATION = SLOT_MIN;
+  const DEFAULT_PLACE_DURATION = 60; // 1 hour, used by click-to-place
   const OPEN_HOUR = (cfg.openHour != null) ? cfg.openHour : 9;   // 9 AM
   const CLOSE_HOUR = (cfg.closeHour != null) ? cfg.closeHour : 21; // 9 PM
 
-  let state = { mods: [], shifts: [], editMode: false, focusedMod: null };
+  let state = { mods: [], shifts: [], editMode: false, focusedMod: null, placingMod: null };
   let dayColEls = [];
 
   // ---------------- utils ----------------
@@ -79,13 +80,17 @@
       showTransientError("Couldn't load data from Power Automate. Check the flow URLs in config.js. Falling back to what's cached locally.");
     }
     document.getElementById("demoBanner").style.display = DataAPI.anyDemoMode() ? "flex" : "none";
-    // If the focused mod was renamed or removed, drop the stale filter.
+    // If the focused/placing mod was renamed or removed, drop the stale state.
     if (state.focusedMod && !state.mods.some(m => m.name === state.focusedMod)) {
       state.focusedMod = null;
+    }
+    if (state.placingMod && !state.mods.some(m => m.name === state.placingMod)) {
+      state.placingMod = null;
     }
     renderSidebar();
     renderShifts();
     renderFocusBanner();
+    renderPlacingBanner();
   }
 
   function showTransientError(msg) {
@@ -109,7 +114,7 @@
     }
     state.mods.forEach(mod => {
       const li = document.createElement("li");
-      li.className = "mod-chip" + (state.editMode ? " editable-chip" : "") + (state.focusedMod === mod.name ? " focused" : "");
+      li.className = "mod-chip" + (state.editMode ? " editable-chip" : "") + (state.focusedMod === mod.name ? " focused" : "") + (state.placingMod === mod.name ? " placing" : "");
       li.draggable = false;
       if (mod.email) li.title = mod.email;
       const swatch = document.createElement("span");
@@ -125,6 +130,21 @@
       actions.className = "chip-actions";
 
       if (state.editMode) {
+        const place = document.createElement("button");
+        place.className = "icon-btn place-btn" + (state.placingMod === mod.name ? " active" : "");
+        place.innerHTML = "&#43;"; // +
+        place.title = state.placingMod === mod.name
+          ? "Click a time slot on the calendar to place a shift (Esc to cancel)"
+          : "Schedule a shift — click this, then click a time slot on the calendar";
+        place.type = "button";
+        place.addEventListener("click", (e) => {
+          e.stopPropagation();
+          state.placingMod = (state.placingMod === mod.name) ? null : mod.name;
+          renderSidebar();
+          renderPlacingBanner();
+        });
+        actions.appendChild(place);
+
         const edit = document.createElement("button");
         edit.className = "icon-btn edit-btn";
         edit.innerHTML = "&#9998;"; // pencil
@@ -150,7 +170,7 @@
         actions.appendChild(rm);
 
         li.addEventListener("mousedown", (e) => {
-          if (e.target === edit || e.target === rm) return;
+          if (e.target === edit || e.target === rm || e.target === place) return;
           startCreateDrag(e, mod.name);
         });
       }
@@ -188,6 +208,54 @@
     renderShifts();
     renderFocusBanner();
   });
+
+  // ---------------- click-to-place ----------------
+
+  function renderPlacingBanner() {
+    const banner = document.getElementById("placingBanner");
+    const grid = document.getElementById("calendarGrid");
+    if (!state.placingMod) {
+      banner.style.display = "none";
+      grid.classList.remove("placing-active");
+      return;
+    }
+    document.getElementById("placingBannerText").textContent = `Click a time slot to schedule ${state.placingMod} (1 hour, snapped to the grid)`;
+    banner.style.display = "flex";
+    grid.classList.add("placing-active");
+  }
+
+  function cancelPlacing() {
+    if (!state.placingMod) return;
+    state.placingMod = null;
+    renderSidebar();
+    renderPlacingBanner();
+  }
+
+  document.getElementById("cancelPlacingBtn").addEventListener("click", cancelPlacing);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") cancelPlacing();
+  });
+
+  // Wires up one day column to accept click-to-place. Uses "mousedown" (not
+  // a native "click") so the exact point clicked is what gets placed —
+  // there's no drag distance to interpret, which is the whole point: no
+  // "prediction," just click and it snaps into place.
+  function wireDayColumnForPlacing(col) {
+    col.addEventListener("mousedown", async (e) => {
+      if (!state.placingMod) return;
+      if (e.target.closest(".shift-block")) return; // let the shift's own handlers deal with it
+      e.preventDefault();
+      const mod = state.placingMod;
+      const rect = col.getBoundingClientRect();
+      const minutesHere = snap(((e.clientY - rect.top) / HOUR_PX) * 60);
+      const start = Math.max(0, Math.min(24 * 60 - DEFAULT_PLACE_DURATION, minutesHere));
+      const end = start + DEFAULT_PLACE_DURATION;
+      const day = DAY_KEYS[parseInt(col.dataset.dayIndex, 10)];
+      if (!confirmOverwrite(mod, day)) return;
+      await DataAPI.setAvailability(mod, day, minutesToHHMM(start), minutesToHHMM(end));
+      await loadAll();
+    });
+  }
 
   // ---------------- calendar skeleton (built once) ----------------
 
@@ -252,6 +320,8 @@
       after.style.top = (CLOSE_HOUR * HOUR_PX) + "px";
       after.style.height = ((24 - CLOSE_HOUR) * HOUR_PX) + "px";
       col.appendChild(after);
+
+      wireDayColumnForPlacing(col);
 
       grid.appendChild(col);
       dayColEls.push(col);
@@ -646,6 +716,7 @@
 
   function setEditMode(on) {
     state.editMode = on;
+    if (!on) state.placingMod = null; // placement requires edit rights
     document.getElementById("modePill").className = "mode-pill " + (on ? "edit" : "display");
     document.getElementById("modePill").innerHTML = `<span class="dot"></span>${on ? "Edit Mode" : "Display Mode"}`;
     document.getElementById("toggleModeBtn").textContent = on ? "Exit Edit Mode" : "Enter Edit Mode";
@@ -653,6 +724,7 @@
     document.getElementById("sidebarHelp").style.display = on ? "block" : "none";
     renderSidebar();
     renderShifts();
+    renderPlacingBanner();
   }
 
   document.getElementById("toggleModeBtn").addEventListener("click", () => {
