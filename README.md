@@ -2,9 +2,11 @@
 
 A two-page internal tool:
 
-- **`index.html`** — Weekly (Sun–Sat, 24hr, Pacific Time) drag-and-drop schedule for mods,
-  with a password-gated Edit Mode and a read-only Display Mode. Each mod has at most one
-  shift per day.
+- **`index.html`** — Drag-and-drop schedule for mods across **4 independent weeks**
+  (Sun–Sat, 24hr, Pacific Time, switchable via the Week 1–4 tabs), with a password-gated
+  Edit Mode and a read-only Display Mode. Supports overlapping shifts (up to 4 mods
+  stacked), light/dark mode, and a click-to-view quick filter on any mod's schedule. Each
+  mod has at most one shift per day, per week.
 - **`checkin.html`** — Check-in / check-out by email, for tracking in-office hours.
 
 ## Quick start (try it now, no setup)
@@ -19,9 +21,11 @@ below — from then on the password lives only in Excel.
 
 ## Making it a real team tool
 
-See **`SETUP-GUIDE.md`** for the full step-by-step: the three Excel tabs (Mods, CheckIns,
-Password), the Power Automate flows that connect the app to that Excel file, and hosting on
-GitHub Pages.
+See **`SETUP-GUIDE.md`** for the full step-by-step: the four Excel tabs (Mods roster,
+Availability, CheckIns, Password), the Power Automate flows that connect the app to that
+Excel file, and hosting on GitHub Pages. Mods (Name/Email) and their schedule (Availability,
+keyed by Email + Week 1–4) live in separate tables, so renaming a mod never disturbs their
+shifts, and nothing ever requires Power Automate to loop over multiple rows.
 
 ## File map
 

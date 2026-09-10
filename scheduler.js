@@ -1,9 +1,13 @@
 /* ============================================================
    CENTIFIC MOD SCHEDULER — calendar logic
    ============================================================
-   Data model: each mod has at most ONE shift per day (their
-   Excel row's day column). "Shifts" shown on the calendar are
-   derived from that — there's no separate schedule table.
+   Data model: the roster (name/email) and the schedule are two
+   separate things. Each mod can have up to one Availability row
+   PER WEEK (1-4), each with at most one shift per day — so the
+   same mod can have a totally different Monday in Week 2 than in
+   Week 1. Availability rows are keyed by email, not name, so
+   renaming a mod never disconnects their schedule. Switching
+   weeks re-derives from already-fetched data; it never re-fetches.
    ============================================================ */
 
 (function () {
@@ -20,7 +24,14 @@
   const OPEN_HOUR = (cfg.openHour != null) ? cfg.openHour : 9;   // 9 AM
   const CLOSE_HOUR = (cfg.closeHour != null) ? cfg.closeHour : 21; // 9 PM
 
-  let state = { mods: [], shifts: [], editMode: false, focusedMod: null };
+  let state = {
+    mods: [],
+    availabilityRows: [],
+    shifts: [],
+    editMode: false,
+    focusedMod: null,
+    currentWeek: cfg.defaultWeek || 1,
+  };
   let dayColEls = [];
 
   // ---------------- utils ----------------
@@ -59,21 +70,29 @@
     const minute = parseInt(map.minute, 10);
     return { dayIdx, minutes: hour * 60 + minute };
   }
-  function hasShift(mod, day) {
-    return state.shifts.some(s => s.mod === mod && s.day === day);
+  // Availability is keyed by EMAIL (not display name) so a rename never
+  // orphans a mod's schedule — see data.js. hasShift/confirmOverwrite key
+  // off email for the same reason; `name` here is only for the confirm()
+  // message text.
+  function hasShift(email, day) {
+    return state.shifts.some(s => s.email === email && s.day === day);
   }
-  function confirmOverwrite(mod, day) {
-    if (!hasShift(mod, day)) return true;
-    return confirm(`${mod} already has a shift on ${DAY_LABELS[DAY_KEYS.indexOf(day)]}. Replace it?`);
+  function confirmOverwrite(email, name, day) {
+    if (!hasShift(email, day)) return true;
+    return confirm(`${name} already has a shift on ${DAY_LABELS[DAY_KEYS.indexOf(day)]} (Week ${state.currentWeek}). Replace it?`);
   }
 
   // ---------------- data load ----------------
 
   async function loadAll() {
     try {
-      const mods = await DataAPI.getMods();
+      // Roster and availability come from separate flows/tables — fetch
+      // both, then derive just the CURRENT week's shifts. Switching weeks
+      // afterward re-derives from this same cached data, no re-fetch.
+      const [mods, availabilityRows] = await Promise.all([DataAPI.getMods(), DataAPI.getAvailability()]);
       state.mods = mods || [];
-      state.shifts = DataAPI.deriveShifts(state.mods);
+      state.availabilityRows = availabilityRows || [];
+      state.shifts = DataAPI.deriveShifts(state.availabilityRows, state.currentWeek, state.mods);
     } catch (err) {
       console.error(err);
       showTransientError("Couldn't load data from Power Automate. Check the flow URLs in config.js. Falling back to what's cached locally.");
@@ -83,6 +102,7 @@
     if (state.focusedMod && !state.mods.some(m => m.name === state.focusedMod)) {
       state.focusedMod = null;
     }
+    renderWeekTabs();
     renderSidebar();
     renderShifts();
     renderFocusBanner();
@@ -151,7 +171,7 @@
 
         li.addEventListener("mousedown", (e) => {
           if (e.target === edit || e.target === rm) return;
-          startCreateDrag(e, mod.name);
+          startCreateDrag(e, mod);
         });
       }
       li.appendChild(actions);
@@ -188,6 +208,33 @@
     renderShifts();
     renderFocusBanner();
   });
+
+  // ---------------- week selector ----------------
+  // This is a multi-week project — each week has its own independent
+  // schedule (its own Availability rows). Switching weeks never re-fetches
+  // from Power Automate; loadAll() already pulled every week's data in one
+  // shot, so this just re-derives and re-renders from what's cached.
+
+  function renderWeekTabs() {
+    const wrap = document.getElementById("weekTabs");
+    wrap.innerHTML = "";
+    DataAPI.WEEKS.forEach(w => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "week-tab" + (w === state.currentWeek ? " active" : "");
+      btn.textContent = `Week ${w}`;
+      btn.addEventListener("click", () => switchWeek(w));
+      wrap.appendChild(btn);
+    });
+  }
+
+  function switchWeek(week) {
+    if (week === state.currentWeek) return;
+    state.currentWeek = week;
+    state.shifts = DataAPI.deriveShifts(state.availabilityRows, state.currentWeek, state.mods);
+    renderWeekTabs();
+    renderShifts();
+  }
 
   // ---------------- calendar skeleton (built once) ----------------
 
@@ -351,7 +398,7 @@
 
   // ---------------- create by dragging a mod chip onto the grid ----------------
 
-  function startCreateDrag(mouseDownEvent, modName) {
+  function startCreateDrag(mouseDownEvent, mod) {
     mouseDownEvent.preventDefault();
     // Tracks whichever day column the cursor is CURRENTLY over — not
     // whichever one it first entered. Locking to the first column broke
@@ -418,8 +465,8 @@
       if (hi - lo < MIN_DURATION) hi = lo + 60; // simple click -> default 1hr
       hi = Math.min(hi, 24 * 60);
       const day = DAY_KEYS[currentDayIndex];
-      if (!confirmOverwrite(modName, day)) return;
-      await DataAPI.setAvailability(modName, day, minutesToHHMM(lo), minutesToHHMM(hi));
+      if (!confirmOverwrite(mod.email, mod.name, day)) return;
+      await DataAPI.setAvailability(mod.email, state.currentWeek, day, minutesToHHMM(lo), minutesToHHMM(hi));
       await loadAll();
     }
 
@@ -469,11 +516,11 @@
       const newDay = DAY_KEYS[newDayIndex];
       const newEnd = newStart + duration;
       if (newDay !== shift.day) {
-        if (!confirmOverwrite(shift.mod, newDay)) { await loadAll(); return; }
-        await DataAPI.setAvailability(shift.mod, shift.day, "", "");
-        await DataAPI.setAvailability(shift.mod, newDay, minutesToHHMM(newStart), minutesToHHMM(newEnd));
+        if (!confirmOverwrite(shift.email, shift.mod, newDay)) { await loadAll(); return; }
+        await DataAPI.setAvailability(shift.email, state.currentWeek, shift.day, "", "");
+        await DataAPI.setAvailability(shift.email, state.currentWeek, newDay, minutesToHHMM(newStart), minutesToHHMM(newEnd));
       } else {
-        await DataAPI.setAvailability(shift.mod, shift.day, minutesToHHMM(newStart), minutesToHHMM(newEnd));
+        await DataAPI.setAvailability(shift.email, state.currentWeek, shift.day, minutesToHHMM(newStart), minutesToHHMM(newEnd));
       }
       await loadAll();
     }
@@ -506,7 +553,7 @@
     async function onUp() {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
-      await DataAPI.setAvailability(shift.mod, shift.day, minutesToHHMM(newStart), minutesToHHMM(newEnd));
+      await DataAPI.setAvailability(shift.email, state.currentWeek, shift.day, minutesToHHMM(newStart), minutesToHHMM(newEnd));
       await loadAll();
     }
 
@@ -553,11 +600,11 @@
       return;
     }
     if (day !== popoverShift.day) {
-      if (!confirmOverwrite(popoverShift.mod, day)) return;
-      await DataAPI.setAvailability(popoverShift.mod, popoverShift.day, "", "");
-      await DataAPI.setAvailability(popoverShift.mod, day, start, end);
+      if (!confirmOverwrite(popoverShift.email, popoverShift.mod, day)) return;
+      await DataAPI.setAvailability(popoverShift.email, state.currentWeek, popoverShift.day, "", "");
+      await DataAPI.setAvailability(popoverShift.email, state.currentWeek, day, start, end);
     } else {
-      await DataAPI.setAvailability(popoverShift.mod, day, start, end);
+      await DataAPI.setAvailability(popoverShift.email, state.currentWeek, day, start, end);
     }
     closeShiftPopover();
     await loadAll();
@@ -565,7 +612,7 @@
 
   document.getElementById("deleteShiftBtn").addEventListener("click", async () => {
     if (!confirm("Delete this shift?")) return;
-    await DataAPI.setAvailability(popoverShift.mod, popoverShift.day, "", "");
+    await DataAPI.setAvailability(popoverShift.email, state.currentWeek, popoverShift.day, "", "");
     closeShiftPopover();
     await loadAll();
   });
@@ -731,6 +778,7 @@
   // ---------------- init ----------------
 
   renderGridSkeleton();
+  renderWeekTabs();
   setEditMode(false);
   loadAll();
 })();

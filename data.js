@@ -6,28 +6,30 @@
    falls back to a browser-local demo store, so the app is fully
    usable before Power Automate is connected.
 
-   Data model: each mod is one row (name, email, and one time
-   range per day of the week — "" means not scheduled that day).
-   A mod can have at most one shift per day.
+   Data model (multi-week):
+   - Mods (roster): { name, email } — one row per person. Stays
+     stable no matter what happens to their schedule.
+   - Availability: { email, week (1-4), sun..sat } — up to one row
+     PER WEEK per mod. Keyed by EMAIL (not name), so renaming a mod
+     never orphans their schedule. A mod can have at most one shift
+     per day, per week.
+   This keeps every write a single-row lookup (List rows filtered
+   by Email+Week, then Update or Add) — no Power Automate loops
+   anywhere, even across 4 weeks.
    ============================================================ */
 
 const DataAPI = (() => {
   const cfg = window.APP_CONFIG;
-  const DEMO_KEY = "centific_mod_scheduler_demo_v2";
+  const DEMO_KEY = "centific_mod_scheduler_demo_v3";
   const DAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
-
-  function blankMod(name, email) {
-    const m = { name, email: email || "" };
-    DAY_KEYS.forEach(d => m[d] = "");
-    return m;
-  }
+  const WEEKS = Array.from({ length: cfg.totalWeeks || 4 }, (_, i) => i + 1);
 
   function loadDemo() {
     try {
       const raw = localStorage.getItem(DEMO_KEY);
       if (raw) return JSON.parse(raw);
     } catch (e) { /* ignore */ }
-    return { mods: [], checkins: [] };
+    return { mods: [], availability: [], checkins: [] };
   }
 
   function saveDemo(store) {
@@ -123,11 +125,11 @@ const DataAPI = (() => {
     setEditKey("");
   }
 
-  // ---------------- MODS + AVAILABILITY ----------------
+  // ---------------- MODS (ROSTER) ----------------
 
   async function getMods() {
     if (isConfigured(cfg.flows.getMods)) {
-      return await callFlow(cfg.flows.getMods, {}, "Loading schedule…");
+      return await callFlow(cfg.flows.getMods, {}, "Loading roster…");
     }
     return loadDemo().mods;
   }
@@ -138,12 +140,21 @@ const DataAPI = (() => {
     }
     const store = loadDemo();
     if (!store.mods.some(m => m.name.toLowerCase() === name.toLowerCase())) {
-      store.mods.push(blankMod(name, email));
+      store.mods.push({ name, email: email || "" });
       saveDemo(store);
     }
     return store.mods;
   }
 
+  // Removes the mod from the roster only. Their Availability rows (across
+  // any of the 4 weeks) are intentionally left alone rather than hunted
+  // down and deleted — cleaning those up would mean looping over up to 4
+  // rows per mod, and this app deliberately never asks Power Automate to
+  // loop. In practice this is harmless: an orphaned Availability row for a
+  // deleted mod's email just never renders anywhere (deriveShifts only
+  // shows rows for emails still in the roster). If you re-add the exact
+  // same email later, their old schedule will reappear — usually a nice
+  // side effect, but worth knowing.
   async function deleteMod(name) {
     if (isConfigured(cfg.flows.deleteMod)) {
       return await callFlow(cfg.flows.deleteMod, { name }, "Removing mod…");
@@ -156,6 +167,14 @@ const DataAPI = (() => {
 
   // Renames a mod and/or updates their email. oldName identifies the
   // Excel row (Key Column); name/email are the new values.
+  //
+  // Availability rows are keyed by EMAIL, not name — so renaming just the
+  // NAME here is completely safe and never disturbs their schedule. If you
+  // also change the EMAIL, though, their existing Availability rows (which
+  // still reference the old email) will stop matching and effectively
+  // disappear from the calendar, for the same "no loops" reason described
+  // on deleteMod above. Changing a name is the common case and fully
+  // supported; changing an email is rare and comes with that caveat.
   async function updateMod(oldName, name, email) {
     if (isConfigured(cfg.flows.updateMod)) {
       return await callFlow(cfg.flows.updateMod, { oldName, name, email }, "Saving mod…");
@@ -170,19 +189,39 @@ const DataAPI = (() => {
     return mod;
   }
 
-  // day: "sun".."sat". start/end: "" (both) clears that day.
-  async function setAvailability(name, day, start, end) {
+  // ---------------- AVAILABILITY (PER WEEK) ----------------
+
+  async function getAvailability() {
+    if (isConfigured(cfg.flows.getAvailability)) {
+      return await callFlow(cfg.flows.getAvailability, {}, "Loading schedule…");
+    }
+    return loadDemo().availability;
+  }
+
+  // week: 1-4. day: "sun".."sat". start/end: "" (both) clears that day.
+  // Identifies the mod by EMAIL (not name) so a later rename never breaks
+  // the link to their schedule.
+  async function setAvailability(email, week, day, start, end) {
     if (isConfigured(cfg.flows.setAvailability)) {
       const clearing = !start && !end;
-      return await callFlow(cfg.flows.setAvailability, { name, day, start, end }, clearing ? "Deleting shift…" : "Saving shift…");
+      return await callFlow(
+        cfg.flows.setAvailability,
+        { email, week, day, start, end },
+        clearing ? "Deleting shift…" : "Saving shift…"
+      );
     }
     const store = loadDemo();
-    const mod = store.mods.find(m => m.name === name);
-    if (mod) {
-      mod[day] = (start && end) ? `${start}-${end}` : "";
-      saveDemo(store);
+    store.availability = store.availability || [];
+    let row = store.availability.find(r => r.email === email && Number(r.week) === Number(week));
+    if (!row) {
+      if (!start && !end) return null; // nothing to clear — no row to create
+      row = { email, week: Number(week) };
+      DAY_KEYS.forEach(d => row[d] = "");
+      store.availability.push(row);
     }
-    return mod;
+    row[day] = (start && end) ? `${start}-${end}` : "";
+    saveDemo(store);
+    return row;
   }
 
   // Cleans up a time fragment pulled out of the Excel cell into the exact
@@ -203,26 +242,34 @@ const DataAPI = (() => {
     return `${h}:${m}`;
   }
 
-  // Flattens each mod's day columns into shift-like objects the
-  // calendar can render: { mod, email, day, start, end }. Computed
-  // client-side — there's no separate "schedule" table anymore.
-  function deriveShifts(mods) {
+  // Flattens one week's worth of Availability rows into shift-like objects
+  // the calendar can render: { mod, email, day, start, end }. `mods` (the
+  // roster) is used only to look up the display name for each email —
+  // Availability rows themselves don't carry a name, on purpose.
+  function deriveShifts(availabilityRows, week, mods) {
+    const nameByEmail = {};
+    (mods || []).forEach(m => { nameByEmail[(m.email || "").toLowerCase()] = m.name; });
+
     const shifts = [];
-    (mods || []).forEach(mod => {
-      DAY_KEYS.forEach(day => {
-        const val = mod[day];
-        if (val && val.includes("-")) {
-          const [start, end] = val.split("-");
-          shifts.push({
-            mod: mod.name,
-            email: mod.email,
-            day,
-            start: normalizeTimeFragment(start),
-            end: normalizeTimeFragment(end),
-          });
-        }
+    (availabilityRows || [])
+      .filter(row => Number(row.week) === Number(week))
+      .forEach(row => {
+        const email = row.email || "";
+        const name = nameByEmail[email.toLowerCase()] || email; // fall back to email if not in the roster
+        DAY_KEYS.forEach(day => {
+          const val = row[day];
+          if (val && val.includes("-")) {
+            const [start, end] = val.split("-");
+            shifts.push({
+              mod: name,
+              email,
+              day,
+              start: normalizeTimeFragment(start),
+              end: normalizeTimeFragment(end),
+            });
+          }
+        });
       });
-    });
     return shifts;
   }
 
@@ -269,7 +316,9 @@ const DataAPI = (() => {
 
   return {
     DAY_KEYS,
-    getMods, addMod, deleteMod, updateMod, setAvailability, deriveShifts,
+    WEEKS,
+    getMods, addMod, deleteMod, updateMod,
+    getAvailability, setAvailability, deriveShifts,
     checkInOut, getCheckIns,
     verifyPassword, exitEditMode,
     isDemoMode, anyDemoMode,
