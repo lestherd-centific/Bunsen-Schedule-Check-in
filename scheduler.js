@@ -375,39 +375,37 @@
       const rect = col.getBoundingClientRect();
       const minutesHere = snap(((e.clientY - rect.top) / HOUR_PX) * 60);
       currentDayIndex = parseInt(col.dataset.dayIndex, 10);
-      if (col !== currentColEl) currentColEl = col;
 
-      if (!e.shiftKey) {
-        // Plain drag: no ghost box — just follow the cursor freely with no
-        // visual "prediction" to fight with. It still creates a shift where
-        // you release (or a default 1hr block on a simple click); you just
-        // don't see a box trying to guess the size while you move.
+      if (col !== currentColEl) {
+        currentColEl = col;
+        col.appendChild(ghost); // move the preview block to the new day
+        ghost.style.display = "block";
+      }
+
+      if (e.shiftKey) {
+        // Hold Shift to snap hard to the current whole hour + day, wherever
+        // the cursor is right now — discards the drag-start anchor so you
+        // don't have to land on an exact pixel. Release Shift to go back to
+        // fine-grained dragging.
+        const hourStart = Math.floor(minutesHere / 60) * 60;
+        startMin = hourStart;
+        currentMin = Math.min(hourStart + 60, 24 * 60);
+        started = true;
+        ghost.classList.add("snap-hour");
+      } else {
         if (!started) {
           started = true;
           startMin = minutesHere; // anchor point, set once on first entry
         }
         currentMin = minutesHere;
-        ghost.style.display = "none";
-        return;
+        ghost.classList.remove("snap-hour");
       }
 
-      // Hold Shift to snap hard to the current whole hour + day, wherever
-      // the cursor is right now — discards the drag-start anchor so you
-      // don't have to land on an exact pixel. This is the only time the
-      // preview box appears, and it always shows exactly what will be
-      // created. Release Shift to go back to the plain, box-free drag.
-      const hourStart = Math.floor(minutesHere / 60) * 60;
-      startMin = hourStart;
-      currentMin = Math.min(hourStart + 60, 24 * 60);
-      started = true;
-
-      if (ghost.parentElement !== col) col.appendChild(ghost);
-      ghost.classList.add("snap-hour");
-      ghost.style.display = "block";
       const lo = Math.min(startMin, currentMin);
       const hi = Math.max(startMin, currentMin);
+      const dur = Math.max(hi - lo, MIN_DURATION);
       ghost.style.top = ((lo / 60) * HOUR_PX) + "px";
-      ghost.style.height = ((hi - lo) / 60 * HOUR_PX) + "px";
+      ghost.style.height = ((dur / 60) * HOUR_PX) + "px";
     }
 
     async function onUp() {
