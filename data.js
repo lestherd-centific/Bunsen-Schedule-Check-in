@@ -53,7 +53,21 @@ const DataAPI = (() => {
     } catch (e) { /* ignore */ }
   }
 
-  async function callFlow(url, payload) {
+  // Tracks how many real (non-demo) flow calls are currently in flight, so
+  // the loading overlay only hides once every concurrent/queued call has
+  // actually finished — a plain boolean would hide it too early if two
+  // calls overlap (e.g. a write immediately followed by a refresh read).
+  let loadingCount = 0;
+  function beginLoading(text) {
+    loadingCount++;
+    if (window.AppLoading) window.AppLoading.show(text);
+  }
+  function endLoading() {
+    loadingCount = Math.max(0, loadingCount - 1);
+    if (loadingCount === 0 && window.AppLoading) window.AppLoading.hide();
+  }
+
+  async function callFlow(url, payload, loadingText) {
     // Deliberately sent as text/plain with NO custom headers, instead of
     // Content-Type: application/json + an X-Edit-Key header. Either of
     // those forces the browser to send an invisible CORS "preflight"
@@ -66,24 +80,29 @@ const DataAPI = (() => {
     // The edit key travels inside the body (editKey) rather than a
     // header, for the same reason.
     const body = Object.assign({}, payload || {}, { editKey: getEditKey() });
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      throw new Error(`Power Automate flow returned ${res.status}`);
+    beginLoading(loadingText);
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(`Power Automate flow returned ${res.status}`);
+      }
+      const text = await res.text();
+      if (!text) return null;
+      try { return JSON.parse(text); } catch (e) { return text; }
+    } finally {
+      endLoading();
     }
-    const text = await res.text();
-    if (!text) return null;
-    try { return JSON.parse(text); } catch (e) { return text; }
   }
 
   // ---------------- EDIT MODE PASSWORD ----------------
 
   async function verifyPassword(password) {
     if (isConfigured(cfg.flows.verifyPassword)) {
-      const result = await callFlow(cfg.flows.verifyPassword, { password });
+      const result = await callFlow(cfg.flows.verifyPassword, { password }, "Checking password…");
       if (result && result.ok) {
         setEditKey(password); // the password itself authorizes subsequent writes
         return true;
@@ -108,14 +127,14 @@ const DataAPI = (() => {
 
   async function getMods() {
     if (isConfigured(cfg.flows.getMods)) {
-      return await callFlow(cfg.flows.getMods, {});
+      return await callFlow(cfg.flows.getMods, {}, "Loading schedule…");
     }
     return loadDemo().mods;
   }
 
   async function addMod(name, email) {
     if (isConfigured(cfg.flows.addMod)) {
-      return await callFlow(cfg.flows.addMod, { name, email });
+      return await callFlow(cfg.flows.addMod, { name, email }, "Adding mod…");
     }
     const store = loadDemo();
     if (!store.mods.some(m => m.name.toLowerCase() === name.toLowerCase())) {
@@ -127,7 +146,7 @@ const DataAPI = (() => {
 
   async function deleteMod(name) {
     if (isConfigured(cfg.flows.deleteMod)) {
-      return await callFlow(cfg.flows.deleteMod, { name });
+      return await callFlow(cfg.flows.deleteMod, { name }, "Removing mod…");
     }
     const store = loadDemo();
     store.mods = store.mods.filter(m => m.name !== name);
@@ -139,7 +158,7 @@ const DataAPI = (() => {
   // Excel row (Key Column); name/email are the new values.
   async function updateMod(oldName, name, email) {
     if (isConfigured(cfg.flows.updateMod)) {
-      return await callFlow(cfg.flows.updateMod, { oldName, name, email });
+      return await callFlow(cfg.flows.updateMod, { oldName, name, email }, "Saving mod…");
     }
     const store = loadDemo();
     const mod = store.mods.find(m => m.name === oldName);
@@ -154,7 +173,8 @@ const DataAPI = (() => {
   // day: "sun".."sat". start/end: "" (both) clears that day.
   async function setAvailability(name, day, start, end) {
     if (isConfigured(cfg.flows.setAvailability)) {
-      return await callFlow(cfg.flows.setAvailability, { name, day, start, end });
+      const clearing = !start && !end;
+      return await callFlow(cfg.flows.setAvailability, { name, day, start, end }, clearing ? "Deleting shift…" : "Saving shift…");
     }
     const store = loadDemo();
     const mod = store.mods.find(m => m.name === name);
@@ -191,7 +211,7 @@ const DataAPI = (() => {
       timestampUtc: new Date().toISOString(),
     };
     if (isConfigured(cfg.flows.checkInOut)) {
-      return await callFlow(cfg.flows.checkInOut, entry);
+      return await callFlow(cfg.flows.checkInOut, entry, action === "in" ? "Checking in…" : "Checking out…");
     }
     const store = loadDemo();
     store.checkins = store.checkins || [];
@@ -203,7 +223,7 @@ const DataAPI = (() => {
   async function getCheckIns(email) {
     let all;
     if (isConfigured(cfg.flows.getCheckIns)) {
-      all = await callFlow(cfg.flows.getCheckIns, email ? { email } : {});
+      all = await callFlow(cfg.flows.getCheckIns, email ? { email } : {}, "Loading activity…");
     } else {
       all = loadDemo().checkins || [];
     }

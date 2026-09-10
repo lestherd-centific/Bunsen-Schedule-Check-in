@@ -207,9 +207,9 @@ You'll repeat a similar pattern eight times. Go to [make.powerautomate.com](http
 
 1. Create a new GitHub repository (can be private if your org allows private Pages, or
    public — there's no sensitive data in the code itself, only in your Excel file/flows).
-2. Upload every file (`index.html`, `checkin.html`, `style.css`, `theme.js`, `config.js`,
-   `data.js`, `scheduler.js`, `checkin.js`) straight into the **root** of the repo — there are
-   no subfolders to worry about.
+2. Upload every file (`index.html`, `checkin.html`, `style.css`, `theme.js`, `loading.js`,
+   `config.js`, `data.js`, `scheduler.js`, `checkin.js`) straight into the **root** of the
+   repo — there are no subfolders to worry about.
 3. In the repo, go to **Settings → Pages** → under "Build and deployment," set **Source** to
    "Deploy from a branch," pick your branch (e.g. `main`) and folder `/root`, then **Save**.
 4. GitHub gives you a URL like `https://your-org.github.io/your-repo/` — share that with

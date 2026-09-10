@@ -33,6 +33,7 @@ index.html         Scheduler page
 checkin.html        Check-in / out page
 style.css           Centific theme (light + dark)
 theme.js            Light/dark mode toggle (loaded first, on both pages)
+loading.js          "Saving..." overlay shown while a Power Automate call is in flight
 config.js           <-- edit this: Power Automate flow URLs, demo password
 data.js             Talks to Power Automate, falls back to local demo storage
 scheduler.js        Calendar drag/resize/edit logic, mod quick-view/edit

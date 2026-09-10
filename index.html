@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mod Scheduler — Centific</title>
 <script src="theme.js"></script>
+<script src="loading.js"></script>
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -64,20 +65,15 @@
         Click a mod's name to view just their schedule on the calendar.
       </p>
       <p class="help-note" id="sidebarHelp" style="display:none;">
-        Click the <strong>+</strong> next to a mod, then click a time slot on the calendar to
-        drop a 1‑hour shift there — no dragging needed. (You can still drag a mod's name onto
-        the calendar instead, if you want to draw a custom-length shift in one motion.) Click
-        an existing shift to fine‑tune its start/end time, or the pencil icon to rename a mod
-        or update their email.
+        Drag a mod's name onto the calendar and drag down to set the shift length. Hold
+        <strong>Shift</strong> while dragging to snap the shift to the current whole hour and
+        day instead of a precise range. Click an existing shift to fine‑tune its start/end
+        time, or the pencil icon to rename a mod or update their email.
       </p>
     </div>
 
     <!-- Calendar -->
     <div class="calendar-col">
-      <div id="placingBanner" class="focus-banner placing-banner" style="display:none;">
-        <span id="placingBannerText"></span>
-        <button id="cancelPlacingBtn" class="btn btn-ghost btn-sm" type="button">Cancel (Esc)</button>
-      </div>
       <div id="focusBanner" class="focus-banner" style="display:none;">
         <span id="focusBannerText"></span>
         <button id="clearFocusBtn" class="btn btn-ghost btn-sm" type="button">Show everyone</button>
@@ -161,6 +157,14 @@
         <button class="btn btn-primary" id="saveModEditBtn">Save</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Loading overlay (shown while a Power Automate call is in flight) -->
+<div id="loadingOverlay" class="loading-overlay" style="display:none;">
+  <div class="loading-card">
+    <div class="loading-bar"><div class="loading-bar-fill"></div></div>
+    <span class="loading-text">Saving…</span>
   </div>
 </div>
 
