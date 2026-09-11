@@ -488,9 +488,31 @@
     let newDayIndex = origDayIndex;
     let newStart = origStart;
 
+    // The actual block being dragged — dimmed while a preview ghost (below)
+    // shows where it will land, so it's clear this is a move, not a copy.
+    const origBlockEl = mouseDownEvent.currentTarget;
+
+    const ghost = document.createElement("div");
+    ghost.className = "ghost-block";
+    ghost.style.display = "none";
+    ghost.style.background = colorForName(shift.mod);
+    ghost.style.opacity = "0.5";
+    let currentColEl = null;
+
+    function positionGhost(col) {
+      if (col !== currentColEl) {
+        currentColEl = col;
+        col.appendChild(ghost);
+        ghost.style.display = "block";
+      }
+      ghost.style.top = ((newStart / 60) * HOUR_PX) + "px";
+      ghost.style.height = Math.max(16, (duration / 60) * HOUR_PX) + "px";
+    }
+
     function onMove(e) {
       if (Math.abs(e.clientY - startClientY) > 4 || Math.abs(e.clientX - startClientX) > 4) moved = true;
       if (!moved) return;
+      origBlockEl.style.opacity = "0.35"; // dim the original once a real drag starts
       const el = document.elementFromPoint(e.clientX, e.clientY);
       const col = el && el.closest ? el.closest(".cal-day-col") : null;
       if (col) newDayIndex = parseInt(col.dataset.dayIndex, 10);
@@ -500,19 +522,25 @@
         const minutesHere = snap(((e.clientY - rect.top) / HOUR_PX) * 60);
         const hourStart = Math.floor(minutesHere / 60) * 60;
         newStart = Math.max(0, Math.min(24 * 60 - duration, hourStart));
+        ghost.classList.add("snap-hour");
       } else {
         const deltaMin = snap(((e.clientY - startClientY) / HOUR_PX) * 60);
         newStart = Math.max(0, Math.min(24 * 60 - duration, origStart + deltaMin));
+        ghost.classList.remove("snap-hour");
       }
+      if (col) positionGhost(col);
     }
 
     async function onUp() {
       document.removeEventListener("mousemove", onMove);
       document.removeEventListener("mouseup", onUp);
+      ghost.remove();
       if (!moved) {
         openShiftPopover(shift);
         return;
       }
+      origBlockEl.style.opacity = ""; // loadAll() below re-renders the grid anyway,
+                                       // but reset in case a confirm() dialog pauses first
       const newDay = DAY_KEYS[newDayIndex];
       const newEnd = newStart + duration;
       if (newDay !== shift.day) {
