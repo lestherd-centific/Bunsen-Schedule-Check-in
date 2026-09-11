@@ -32,7 +32,7 @@ window.APP_CONFIG = {
     // the extra day columns.
     getMods:         "https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/c9a10af6d141423f9104150509e7b0e5/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=qpYkROwJd5DPd_9rARWyLQEvRbTqlHeO4BiGf4QhOPg",   // GET/POST -> [{ name, email }, ...]
     addMod:          "https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/02/workflows/1e6d96c0018742ac820999fe19b1ad43/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=rws3CnVhvmtxhteNExavG5TKDMimdFeDtMTzGwQZR3Y",   // POST { name, email }
-    deleteMod:       "",   // POST { name }
+    deleteMod:       "https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/27/workflows/89c144cc18e04a33b3a4e2a5c254ffe5/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=efZwpoLqtYKe2WuOm0dJRII_MCKYW5N6-DwHnr9zii8",   // POST { name }
     updateMod:       "",   // POST { oldName, name, email } -> renames a mod and/or updates their email
 
     // Availability — one row per (mod, week). NEW flow, see SETUP-GUIDE.md.
