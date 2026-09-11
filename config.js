@@ -48,7 +48,7 @@ window.APP_CONFIG = {
 
     // Check-in / check-out log
     checkInOut:      "https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/02/workflows/0109011414a1473c8fd39bb2f3a4230c/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=kMxd5aDkJ8wmBuCUIJY4XkjZ1Wxp1PoDcIvisz8Civk",   // POST { email, action: "in" | "out" }
-    getCheckIns:     "",   // GET/POST -> [{ email, action, timestampUtc }, ...]
+    getCheckIns:     "https://default9b415834803a4da0afdcfe6b1d52d6.49.environment.api.powerplatform.com:443/powerautomate/automations/direct/cu/06/workflows/36a8fc65ccc0458c93712aeaf0603fa3/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=gHh1b4IvY6U6kToBgV-PY1I1dmZ7LEJsv1p1-SVRdIw",   // GET/POST -> [{ email, action, timestampUtc }, ...]
 
     // Edit-mode password (checked against the single value in the
     // Excel "Password" table — see SETUP-GUIDE.md)
